@@ -5,12 +5,16 @@ using namespace std;
 
 namespace nrpd
 {
-    class NrpServer
+    class NrpdServer
     {
     public:
-        NrpServer();
+        NrpdServer();
+        NrpdServer(shared_ptr<NrpdConfig> cfg);
+        int InitializeServer();
+        int ServerLoop();
     private:
         shared_ptr<NrpdConfig> m_config;
+        int m_socketfd;
 
     };
 }

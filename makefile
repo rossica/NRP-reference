@@ -1,10 +1,10 @@
 CC=g++
 DEBUG=-g
-CXXFLAGS=-std=c++11 -Wall -pedantic $(DEBUG)
+CXXFLAGS=-std=c++11 -Wall -pedantic -fms-extensions $(DEBUG)
 LFLAGS=-Wall $(DEBUG)
 
 all:
-	$(CC) $(CXXFLAGS) main.cpp config.h config.cpp server.h server.cpp client.h client.cpp -o nrpd
+	$(CC) $(CXXFLAGS) main.cpp config.cpp server.cpp client.cpp -o nrpd
 
 clean:
 	rm *.o nrpd
