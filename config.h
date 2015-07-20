@@ -12,14 +12,18 @@ namespace nrpd
     public:
         NrpdConfig();
         NrpdConfig(string*);
-        short port();
+        unsigned short port();
+        bool enableServer();
+        bool enableClient();
+        bool obfuscateResponse();
     private: 
         string m_configPath;
-        short m_port;
+        unsigned short m_port;
         bool m_enableServer;
         bool m_enableClient;
-        //list<sockaddr_in> m_serverAddresses;
+        //list<char*> m_serverAddresses;
         char* m_serverAddress;
+        bool m_obfuscateResponse;
         
         
     };

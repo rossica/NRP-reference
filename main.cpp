@@ -21,7 +21,7 @@ using namespace nrpd;
 
 int main(int argc, char* argv[])
 {
-    pid_t pid, sid;
+    pid_t pid = 0, sid = 0;
     int retCode = 0;
     shared_ptr<NrpdConfig> config(new NrpdConfig);
     shared_ptr<NrpdServer> server;
@@ -35,7 +35,7 @@ int main(int argc, char* argv[])
     
     // Fork in the background to daemonize
     // TODO: make this configurable
-    pid = fork();
+    //pid = fork();
     if(pid < 0)
     {
         exit(EXIT_FAILURE);
@@ -51,7 +51,7 @@ int main(int argc, char* argv[])
     //TODO: start logging here
 
     // create new session for child process
-    sid = setsid();
+    //sid = setsid();
     if(sid < 0)
     {
         exit(EXIT_FAILURE);
@@ -77,6 +77,7 @@ int main(int argc, char* argv[])
     }
 
     retCode = server->ServerLoop();
+    printf("%d", retCode);
 
     
      

@@ -11,7 +11,8 @@ namespace nrpd
         m_configPath = "";
         m_enableServer = true;
         m_enableClient = true;
-        m_serverAddress = 0;
+        m_serverAddress = nullptr;
+        m_obfuscateResponse = false;
     }
 
     NrpdConfig::NrpdConfig(string* path)
@@ -20,8 +21,23 @@ namespace nrpd
         m_configPath = *path;
     }
 
-    short NrpdConfig::port()
+    unsigned short NrpdConfig::port()
     {
         return m_port;
     }
+
+    bool NrpdConfig::enableServer()
+    {
+        return m_enableServer;
+    }
+
+    bool NrpdConfig::enableClient()
+    {
+        return m_enableClient;
+    }
+
+    bool NrpdConfig::obfuscateResponse()
+    {
+        return m_obfuscateResponse;
+    } 
 }
