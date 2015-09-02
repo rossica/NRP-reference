@@ -11,8 +11,10 @@ namespace nrpd
         m_configPath = "";
         m_enableServer = true;
         m_enableClient = true;
-        m_serverAddress = nullptr;
+        m_entropyServerAddress = nullptr;
         m_obfuscateResponse = false;
+        m_clientRequestIntervalSeconds = 60;
+        m_clientReceiveTimeout = 5;
     }
 
     NrpdConfig::NrpdConfig(string* path)
@@ -39,5 +41,15 @@ namespace nrpd
     bool NrpdConfig::obfuscateResponse()
     {
         return m_obfuscateResponse;
+    }
+
+    int NrpdConfig::clientRequestInterval()
+    {
+        return m_clientRequestIntervalSeconds;
+    }
+
+    int NrpdConfig::receiveTimeout()
+    {
+        return m_clientReceiveTimeout;
     } 
 }

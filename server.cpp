@@ -7,12 +7,12 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <linux/random.h>
-#include <linux/random.h>
 #include <netinet/in.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <syscall.h>
 #include <unistd.h>
 
 #include <memory>
@@ -58,7 +58,7 @@ namespace nrpd
         sockaddr_in host_addr;
 
         // TODO: make this configurable
-        m_socketfd = socket(AF_INET, SOCK_DGRAM, 0);
+        m_socketfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
         if(m_socketfd < 0)
         {
             // insert error code here
@@ -174,7 +174,7 @@ namespace nrpd
             else
             {
 
-                //if(getrandom(entropy, req->requestedEntropy, 0) < 0)
+                //if(syscall(SYS_getrandom,entropy, req->requestedEntropy, 0) < 0)
                 if(read(m_randomfd, entropy, req->requestedEntropy) < 0)
                 {
                     // TODO: log an error
