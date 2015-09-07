@@ -20,20 +20,22 @@ namespace nrpd
         int clientRequestInterval();
         int receiveTimeout();
         char* entropyServerAddress();
-    private: 
+    private:
         string m_configPath;
         unsigned short m_port;
         bool m_enableServer;
         bool m_enableClient;
-        //list<char*> m_serverAddresses;
+        //list<Host> m_configuredServerAddresses;
+        //list<Host> m_activeServerAddresses;
+        //list<Host> m_probationaryServerAddresses;
         char* m_entropyServerAddress;
         char* m_randomDevice;
         bool m_obfuscateResponse;
         bool m_forkDaemon;
-        
+
         int m_clientRequestIntervalSeconds;
         int m_clientReceiveTimeout;
-        
-        
+
+
     };
 }

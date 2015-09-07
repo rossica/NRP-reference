@@ -36,17 +36,7 @@ namespace nrpd
             close(m_socketfd);
         }
 
-        if(m_randomMinfd)
-        {
-            close(m_randomMinfd);
-        }
-
-        if(m_randomAvailfd)
-        {
-            close(m_randomAvailfd);
-        }
-
-        if(m_randomfd)
+        if(m_randomfd > 0)
         {
             close(m_randomfd);
         }
@@ -78,7 +68,7 @@ namespace nrpd
             return errno;
         }
 
-        if(open("/dev/urandom", O_RDONLY) < 0)
+        if((m_randomfd = open("/dev/urandom", O_RDONLY)) < 0)
         {
             // TODO: add logging
             return errno;
@@ -96,10 +86,7 @@ namespace nrpd
             ssize_t count;
 
             unsigned char buffer[MAX_RESPONSE_MESSAGE_SIZE];
-            unsigned char entropy[256];
-            char temp[6];
-            int availEntropy = 0;
-            int minEntropy = 0;
+            unsigned char entropy[MAX_BYTE];
 
 
             memset(buffer, 0, sizeof(buffer));
@@ -111,13 +98,11 @@ namespace nrpd
                 continue;
             }
 
-            // probably really dumb
-            printf("%u (%u) [%u] %s\n", MAX_REQUEST_MESSAGE_SIZE, MAX_RESPONSE_MESSAGE_SIZE, MAX_REJECT_MESSAGE_SIZE, buffer);
             pNrp_Header_Request req = (pNrp_Header_Request) buffer;
 
 
             // validate packet
-            if(!ValidateRequestEntropyPacket(req))
+            if(!ValidateRequestPacket(req))
             {
                 // ignore malformed packets
                 printf("malformed packet\n");
@@ -127,67 +112,22 @@ namespace nrpd
             // check if client has requested recently
 
             // check available entropy
-            m_randomMinfd = open("/proc/sys/kernel/random/read_wakeup_threshold", O_RDONLY);
-            if(m_randomMinfd < 0)
-            {
-                // TODO: report an error
-                return errno;
-            }
-
-            m_randomAvailfd = open("/proc/sys/kernel/random/entropy_avail", O_RDONLY);
-            if(m_randomAvailfd < 0)
-            {
-                // TODO: report an error
-                return errno;
-            }
-
-            if(read(m_randomMinfd, temp, sizeof(temp)) < 0)
-            {
-                // TODO: log an error
-                return errno;
-            }
-            minEntropy = strtol(temp, nullptr, 10);
-            close(m_randomMinfd);
-
-            if(read(m_randomAvailfd, temp, sizeof(temp)) < 0)
-            {
-                // TODO: log an error
-                return errno;
-            }
-            availEntropy = strtol(temp, nullptr, 10);
-            close(m_randomAvailfd);
-
-            minEntropy = minEntropy / 8;
-            availEntropy = availEntropy / 8;
 
             // if not enough entropy: generate reject packet
-            if(req->requestedEntropy > (availEntropy - minEntropy) )
-            {
-                if(!GenerateRejectPacket(unspecified, (pNrp_Header_Reject) buffer))
-                {
-                    return -3;
-                }
-                count = MAX_REJECT_MESSAGE_SIZE;
-                printf("rejecting request\n");
-            }
-            // if enough entropy: generate response packet
-            else
-            {
 
-                //if(syscall(SYS_getrandom,entropy, req->requestedEntropy, 0) < 0)
-                if(read(m_randomfd, entropy, req->requestedEntropy) < 0)
-                {
-                    // TODO: log an error
-                    return errno;
-                }
-
-                count = req->requestedEntropy + RESPONSE_HEADER_SIZE; 
-                if(!GenerateResponseEntropyPacket(req->requestedEntropy, entropy, sizeof(buffer), (pNrp_Header_Response) buffer))
-                {
-                    return -1;
-                }
-                printf("generating response\n");
+            //if(syscall(SYS_getrandom,entropy, req->requestedEntropy, 0) < 0)
+            if(read(m_randomfd, entropy, 8/* TODO: replace with parsed value */) < 0)
+            {
+                // TODO: log an error
+                return errno;
             }
+
+            count = 8 /* TODO: replace with parsed value */ + RESPONSE_HEADER_SIZE;
+            if(!GenerateResponseEntropyMessage(8/* TODO: replace with parsed value */, entropy, sizeof(buffer), (pNrp_Header_Message) buffer))
+            {
+                return -1;
+            }
+            printf("generating response\n");
 
             // send generated packet
             if( (count = sendto(m_socketfd, buffer, count, 0, (sockaddr*) &srcAddr, srcAddrLen)) < 0)
