@@ -368,5 +368,35 @@ namespace nrpd
 
         return (pNrp_Header_Message) hdr->content + sizeof(Nrp_Message_Reject);
     }
-}
 
+
+    pNrp_Header_Message GeneratePacketHeader(unsigned short length, nrpd_msg_type type, unsigned char msgCount, pNrp_Header_Packet buffer)
+    {
+        if(buffer == nullptr)
+        {
+            return nullptr;
+        }
+
+        // Only response and request can be packet header types
+        if(type != nrpd_msg_type::request || type != nrpd_msg_type::response)
+        {
+            return nullptr;
+        }
+
+        if(length > ((type == nrpd_msg_type::request) ? MAX_REQUEST_MESSAGE_SIZE : MAX_RESPONSE_MESSAGE_SIZE))
+        {
+            return nullptr;
+        }
+
+        if(msgCount == 0)
+        {
+            return nullptr;
+        }
+
+        buffer->length = length;
+        buffer->msgType = type;
+        buffer->msgCount = msgCount;
+
+        return buffer->messages;
+    }
+}

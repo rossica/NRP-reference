@@ -107,5 +107,9 @@ namespace nrpd
 
     // Generates a reject message
     // Returns a pointer to the end of the message on success, nullptr otherwise.
-    pNrp_Header_Message GenerateRejectMessage(nrpd_reject_reason reason, nrpd_msg_type message, pNrp_Header_Message pkt);
+    pNrp_Header_Message GenerateRejectMessage(nrpd_reject_reason reason, nrpd_msg_type message, pNrp_Header_Message hdr);
+
+    // Generate a packet header
+    // Returns a pointer to the end of the message on success, nullptr otherwise.
+    pNrp_Header_Message GeneratePacketHeader(unsigned short length, nrpd_msg_type type, unsigned char msgCount, pNrp_Header_Packet buffer);
 }
