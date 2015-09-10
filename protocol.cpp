@@ -288,7 +288,7 @@ namespace nrpd
             return nullptr;
         }
 
-        if(ipType != nrpd_msg_type::ip4peers || ipType != nrpd_msg_type::ip6peers)
+        if(ipType != nrpd_msg_type::ip4peers && ipType != nrpd_msg_type::ip6peers)
         {
             return nullptr;
         }
@@ -315,7 +315,7 @@ namespace nrpd
             return nullptr;
         }
 
-        if(ipType != nrpd_msg_type::ip4peers || ipType != nrpd_msg_type::ip6peers)
+        if(ipType != nrpd_msg_type::ip4peers && ipType != nrpd_msg_type::ip6peers)
         {
             return nullptr;
         }
@@ -341,7 +341,7 @@ namespace nrpd
 
         memcpy(buffer->content, ListOfPeers, contentSize);
 
-        return (pNrp_Header_Message) buffer->content + contentSize;
+        return (pNrp_Header_Message) (buffer->content + contentSize);
     }
 
 
@@ -378,7 +378,7 @@ namespace nrpd
         }
 
         // Only response and request can be packet header types
-        if(type != nrpd_msg_type::request || type != nrpd_msg_type::response)
+        if(type != nrpd_msg_type::request && type != nrpd_msg_type::response)
         {
             return nullptr;
         }
@@ -393,7 +393,7 @@ namespace nrpd
             return nullptr;
         }
 
-        buffer->length = length;
+        buffer->length = htons(length);
         buffer->msgType = type;
         buffer->msgCount = msgCount;
 

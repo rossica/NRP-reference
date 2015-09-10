@@ -7,16 +7,16 @@ namespace nrpd
     enum nrpd_msg_type
     {
         nrpd_msg_type_min = 0,
-        request = 1,                    // Request a response from a server
-        response = 2,                   // Respond to a request
+        request = 1,                // Request a response from a server
+        response = 2,               // Respond to a request
         response_msg_min = 3,
-        reject = 3,                     // Reject a request
+        reject = 3,                 // Reject a request
         request_msg_min = 4,
-        ip4peers = 4,                   // Valid IP4 hosts that speak NRP
-        entropy = 5,                    // Random data
-        ip6peers = 6,                   // Valid IP6 hosts that speak NRP
-        pubkey = 7,                     // RSA public key and cert to establish trust
-        secureentropy = 8,              // Entropy encrypted with a one-time pad
+        ip4peers = 4,               // Valid IP4 hosts that speak NRP
+        entropy = 5,                // Random data
+        ip6peers = 6,               // Valid IP6 hosts that speak NRP
+        pubkey = 7,                 // RSA public key and cert to establish trust
+        secureentropy = 8,          // Entropy encrypted with a one-time pad
         nrpd_msg_type_max
     };
 
