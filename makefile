@@ -4,7 +4,7 @@ CXXFLAGS=-std=c++11 -Wall -pedantic -fms-extensions $(DEBUG)
 LFLAGS=-Wall $(DEBUG)
 
 
-default: nrpd
+all: nrpd
 
 nrpd:	protocol.o config.o server.o client.o main.o
 	$(CC) $(LFLAGS) -o bin/nrpd obj/protocol.o obj/server.o obj/client.o obj/config.o obj/main.o

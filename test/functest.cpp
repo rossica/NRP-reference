@@ -18,9 +18,14 @@ void TestPlatformAlignment()
         cout << "Your compiler/platform is 2-byte aligned" << endl
              << "You shouldn't have any problems..." << endl;
     }
-    else if(sizeof(test5) == 8)
+    else if(sizeof(test5) == 8 && sizeof(test3) == 4)
     {
         cout << "Your compiler/platform is 4-byte aligned." << endl
+             << "This will require changing the ip4peer, ip6peer, and reject structs" << endl;
+    }
+    else if(sizeof(test5) == 8 && sizeof(test3) == 8)
+    {
+        cout << "Your compiler/platform is 8-byte aligned." << endl
              << "This will require changing the ip4peer, ip6peer, and reject structs" << endl;
     }
     else
@@ -344,7 +349,7 @@ bool TestCreateResponse()
 {
     unsigned char buffer[1024], entropy[8];
     pNrp_Header_Message msg;
-    unsigned int msgCount = 3;
+    unsigned int msgCount = 4;
     unsigned int countIp4addr = 2;
     unsigned int countEntropy = 8;
     unsigned int countIp6addr = 4;
@@ -360,7 +365,8 @@ bool TestCreateResponse()
                         + (msgCount * sizeof(Nrp_Header_Message))
                         + (countIp4addr * sizeof(Nrp_Message_Ip4Peer))
                         + (countEntropy)
-                        + (countIp6addr * sizeof(Nrp_Message_Ip6Peer));
+                        + (countIp6addr * sizeof(Nrp_Message_Ip6Peer))
+                        + sizeof(Nrp_Message_Reject);
     unsigned int remainingSize = size;
 
     /// TEST VALID RESPONSE PACKET HEADER CREATION ///
@@ -402,11 +408,23 @@ bool TestCreateResponse()
         return false;
     }
 
+    remainingSize -= (sizeof(Nrp_Header_Message) + countEntropy);
+
+    msg = GenerateRejectMessage(nrpd_reject_reason::unsupported, nrpd_msg_type::pubkey, msg);
+
+    if(msg == nullptr)
+    {
+        cout << "Failed to create reject message." << endl;
+        return false;
+    }
+
     if(!ValidateResponsePacket((pNrp_Header_Response)buffer))
     {
         cout << "Failed to validate response packet." << endl;
         return false;
     }
+
+    // TODO: Add negative test cases for response packets.
 
 
     cout << "All response packet creation/validation tests passed!" << endl;

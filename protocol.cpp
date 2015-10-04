@@ -277,7 +277,7 @@ namespace nrpd
 
         memcpy(buffer->content, entropy, entropyLength);
 
-        return (pNrp_Header_Message) buffer->content + entropyLength;
+        return (pNrp_Header_Message) (buffer->content + entropyLength);
     }
 
 
@@ -366,7 +366,7 @@ namespace nrpd
         msg->msgType =  message;
         msg->reason = reason;
 
-        return (pNrp_Header_Message) hdr->content + sizeof(Nrp_Message_Reject);
+        return (pNrp_Header_Message) (hdr->content + sizeof(Nrp_Message_Reject));
     }
 
 
