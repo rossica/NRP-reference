@@ -11,6 +11,24 @@
 using namespace std;
 namespace nrpd
 {
+    pNrp_Header_Message NextMessage(pNrp_Header_Message msg)
+    {
+        return (pNrp_Header_Message) (((unsigned char*)msg) + ntohs(msg->length));
+    }
+
+
+    pNrp_Header_Message NextMessage(unsigned char* msg, unsigned short count)
+    {
+        return (pNrp_Header_Message) (msg + count);
+    }
+
+
+    void* EndOfPacket(pNrp_Header_Packet pkt)
+    {
+        return ((unsigned char*)pkt) + ntohs(pkt->length);
+    }
+
+
     bool ValidateMessageSize(pNrp_Header_Message hdr, size_t msgSize)
     {
         // The length, minus the header, should be equal to the number of
@@ -130,13 +148,11 @@ namespace nrpd
         }
 
         // Verify count of messages and packet size
-        const unsigned char* ptr = (unsigned char*) pkt->messages;
+        pNrp_Header_Message msgPtr = pkt->messages;
         int msgCount = 0;
 
-        while(ptr < ((unsigned char*) pkt) + ntohs(pkt->length))
+        while(msgPtr < EndOfPacket(pkt))
         {
-            pNrp_Header_Message msgPtr = (pNrp_Header_Message) ptr;
-
             // Validate message header is appropriate for packet type
             if(!ValidateMessageHeader(msgPtr, isRequest))
             {
@@ -144,7 +160,7 @@ namespace nrpd
             }
 
             // Go to next message
-            ptr += ntohs(msgPtr->length);
+            msgPtr = NextMessage(msgPtr);
             ++msgCount;
         }
 
@@ -155,7 +171,7 @@ namespace nrpd
         }
 
         // Verify packet length matches
-        if(ptr > ((unsigned char*) pkt) + ntohs(pkt->length))
+        if(msgPtr > EndOfPacket(pkt))
         {
             return false;
         }
@@ -277,7 +293,7 @@ namespace nrpd
 
         memcpy(buffer->content, entropy, entropyLength);
 
-        return (pNrp_Header_Message) (buffer->content + entropyLength);
+        return NextMessage(buffer->content, entropyLength);
     }
 
 
@@ -341,12 +357,26 @@ namespace nrpd
 
         memcpy(buffer->content, ListOfPeers, contentSize);
 
-        return (pNrp_Header_Message) (buffer->content + contentSize);
+        return NextMessage(buffer->content, contentSize);
     }
 
 
-    // TODO: Make this support more than one rejection
-    pNrp_Header_Message GenerateRejectMessage(nrpd_reject_reason reason, nrpd_msg_type message, pNrp_Header_Message hdr)
+    pNrp_Message_Reject GenerateRejectHeader(unsigned char count, pNrp_Header_Message hdr)
+    {
+        if(hdr == nullptr)
+        {
+            return nullptr;
+        }
+
+        hdr->length = htons(sizeof(Nrp_Header_Message) + (sizeof(Nrp_Message_Reject) * count));
+        hdr->msgType = nrpd_msg_type::reject;
+        hdr->countOrSize = count;
+
+        return (pNrp_Message_Reject) hdr->content;
+    }
+
+
+    pNrp_Message_Reject GenerateRejectMessage(nrpd_reject_reason reason, nrpd_msg_type message, pNrp_Message_Reject hdr)
     {
         if(reason >= nrpd_reject_reason::nrpd_reject_reason_max)
         {
@@ -358,15 +388,10 @@ namespace nrpd
             return nullptr;
         }
 
-        hdr->length = htons(sizeof(Nrp_Header_Message) + sizeof(Nrp_Message_Reject));
-        hdr->msgType = nrpd_msg_type::reject;
-        hdr->countOrSize = 1;
-        pNrp_Message_Reject msg = (pNrp_Message_Reject) hdr->content;
+        hdr->msgType = message;
+        hdr->reason = reason;
 
-        msg->msgType =  message;
-        msg->reason = reason;
-
-        return (pNrp_Header_Message) (hdr->content + sizeof(Nrp_Message_Reject));
+        return (pNrp_Message_Reject) NextMessage((unsigned char*)hdr, sizeof(Nrp_Message_Reject));
     }
 
 

@@ -77,6 +77,15 @@ namespace nrpd
 #define MAX_REJECT_MESSAGE_SIZE sizeof(Nrp_Header_Message) + (MAX_BYTE * sizeof(Nrp_Message_Reject))
 #define RESPONSE_HEADER_SIZE sizeof(Nrp_Header_Response)
 
+    // Advance message pointer by length of message
+    pNrp_Header_Message NextMessage(pNrp_Header_Message msg);
+
+    // Advance message pointer by a number of bytes
+    pNrp_Header_Message NextMessage(unsigned char* msg, unsigned short count);
+
+    // Calculate end of packet
+    void* EndOfPacket(pNrp_Header_Packet pkt);
+
     // Validate the internal messages' headers in request/reponse packets
     bool ValidateMessageHeader(pNrp_Header_Message hdr, bool isRequest);
 
@@ -105,11 +114,16 @@ namespace nrpd
     // Returns a pointer to the end of the message on success, nullptr otherwise.
     pNrp_Header_Message GenerateResponsePeersMessage(nrpd_msg_type ipType, unsigned char countOfPeers, unsigned char* ListOfPeers, unsigned int bufferSize, pNrp_Header_Message buffer);
 
-    // Generates a reject message
+    // Generates a reject header
+    // Returns a pointer to the end of the header on success, nullptr otherwise.
+    pNrp_Message_Reject GenerateRejectHeader(unsigned char count, pNrp_Header_Message hdr);
+
+    // Generate a reject message
     // Returns a pointer to the end of the message on success, nullptr otherwise.
-    pNrp_Header_Message GenerateRejectMessage(nrpd_reject_reason reason, nrpd_msg_type message, pNrp_Header_Message hdr);
+    pNrp_Message_Reject GenerateRejectMessage(nrpd_reject_reason reason, nrpd_msg_type message, pNrp_Message_Reject hdr);
 
     // Generate a packet header
     // Returns a pointer to the end of the message on success, nullptr otherwise.
     pNrp_Header_Message GeneratePacketHeader(unsigned short length, nrpd_msg_type type, unsigned char msgCount, pNrp_Header_Packet buffer);
+
 }

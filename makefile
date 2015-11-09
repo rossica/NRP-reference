@@ -1,7 +1,7 @@
 CC=g++
 DEBUG=-g
-CXXFLAGS=-std=c++11 -Wall -pedantic -fms-extensions $(DEBUG)
-LFLAGS=-Wall $(DEBUG)
+CXXFLAGS=-std=c++14 -Wall -pedantic -fms-extensions $(DEBUG)
+LFLAGS=-Wall $(DEBUG) -lpthread
 
 
 all: nrpd
