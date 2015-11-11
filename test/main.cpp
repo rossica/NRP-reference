@@ -6,8 +6,8 @@ int main(int argc, char* argv[])
     bool result = true;
 
     result = TestStructSizes();
-    result = TestCreateRequest();
-    result = TestCreateResponse();
+    result = TestProtocolCreateRequest();
+    result = TestProtocolCreateResponse();
 
     if(!result)
     {

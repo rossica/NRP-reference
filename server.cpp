@@ -117,16 +117,78 @@ namespace nrpd
     }
 
 
+    int NrpdServer::CalculateRemainingBytes(int availableBytes, int rejCount)
+    {
+        if(rejCount > 0)
+        {
+            return availableBytes - (sizeof(Nrp_Header_Message) + (rejCount * sizeof(Nrp_Message_Reject)));
+        }
+        else
+        {
+            return availableBytes;
+        }
+    }
+
+    unique_ptr<unsigned char[]> NrpdServer::GeneratePeersResponse(nrpd_msg_type type, int msgCount, int availableBytes, int rejCount, int& outResponseSize)
+    {
+        int size = 0;
+        int dataSize = 0;
+        unique_ptr<unsigned char[]> tempMsgBuffer;
+        unique_ptr<unsigned char[]> data;
+
+        if(type == ip6peers)
+        {
+            size = sizeof(Nrp_Message_Ip6Peer);
+        }
+        else
+        {
+            size = sizeof(Nrp_Message_Ip4Peer);
+        }
+
+        outResponseSize = 0;
+
+        if(msgCount <= 0)
+        {
+            // Client didn't specify, so give them as many as will fit
+            msgCount = m_config->ActiveServerCount(type);
+        }
+        else
+        {
+            msgCount = min(m_config->ActiveServerCount(type), msgCount);
+        }
+
+        // Calculate size of response
+        outResponseSize = CalculateMessageSize(CalculateRemainingBytes(availableBytes, rejCount), size, msgCount);
+        if(outResponseSize == 0)
+        {
+            // Not enough room for this message
+            return nullptr;
+        }
+
+        // Allocate and generate response
+        tempMsgBuffer = make_unique<unsigned char[]>(outResponseSize);
+
+        data = m_config->GetServerList(type, msgCount, dataSize);
+
+        if(GenerateResponsePeersMessage(type, msgCount, data.get(), dataSize, (pNrp_Header_Message) tempMsgBuffer.get()))
+        {
+            return tempMsgBuffer;
+        }
+        else
+        {
+            return nullptr;
+        }
+    }
+
+
     bool NrpdServer::ParseMessages(pNrp_Header_Request pkt, std::list<unique_ptr<unsigned char[]>>& msgs)
     {
         std::list<Nrp_Message_Reject> rejections;
         pNrp_Header_Message currentMsg;
         unique_ptr<unsigned char[]> tempMsgBuffer;
-        unique_ptr<unsigned char[]> data;
 
         // Only send as much data as will fit in one packet. Client can request more later.
         int bytesRemaining = m_mtu - sizeof(udphdr);
-        int dataSize;
         int responseSize;
         int msgCount;
 
@@ -146,73 +208,72 @@ namespace nrpd
         while(currentMsg < EndOfPacket(pkt) && bytesRemaining > 0)
         {
             responseSize = 0;
-            msgCount = 0;
-            dataSize = 0;
 
             switch(currentMsg->msgType)
             {
             case ip4peers:
-                // Parse request
-                msgCount = min(m_config->activeServerCount(false), (int)currentMsg->countOrSize);
-
-                if(msgCount == 0)
-                {
-                    // Client didn't specify, so give them as many as will fit
-                    msgCount = m_config->activeServerCount(false);
-                }
-
-                // Calculate size of response
-                responseSize = CalculateMessageSize(bytesRemaining, sizeof(Nrp_Message_Ip4Peer), msgCount);
-                if(responseSize == 0)
-                {
-                    // Not enough room for this message
-                    break;
-                }
-
-                // Allocate and generate response
-                tempMsgBuffer = make_unique<unsigned char[]>(responseSize);
-
-                data = m_config->GetServerList(false, msgCount, dataSize);
-
-                GenerateResponsePeersMessage(ip4peers, msgCount, data.get(), dataSize, (pNrp_Header_Message) tempMsgBuffer.get());
-                break;
             case ip6peers:
+                tempMsgBuffer = GeneratePeersResponse((nrpd_msg_type) currentMsg->msgType, currentMsg->countOrSize, bytesRemaining, rejections.size(), responseSize);
+                if(tempMsgBuffer == nullptr)
+                {
+                    // Memory allocation failed inside GeneratePeersResponse.
+                    responseSize = 0;
+                }
+                break;
             case entropy:
                 break;
             case pubkey:
             case secureentropy:
                 // TODO: check if configured for pubkey
-                // TODO: Does this create a static struct, or a new one each time?
-                rejections.push_front({currentMsg->msgType, unsupported});
+                rejections.push_back({currentMsg->msgType, unsupported});
             default:
+                // Invalid message; should have never gotten this far
                 break;
             }
 
-            bytesRemaining -= responseSize;
+            if(tempMsgBuffer != nullptr)
+            {
+                msgs.push_back(move(tempMsgBuffer));
+                bytesRemaining -= responseSize;
+            }
+
             currentMsg = NextMessage(currentMsg);
-            // BUGBUG: How to guarantee enough room for reject messages?
         }
 
         // check for any rejections and add them to the list of messages
         if(!rejections.empty())
         {
-            // Allocate buffer for rejection messages
-            (
-               tempMsgBuffer = make_unique<unsigned char[]>(
-                                  sizeof(Nrp_Header_Message) +
-                                  (sizeof(Nrp_Message_Reject) * rejections.size())));
+            msgCount = rejections.size();
 
-            // generate rejection
-            if(tempMsgBuffer != nullptr)
+            // It's possible there's not enough room for rejections
+            // Calculate if we can fit the entire rejection message
+            // TODO: re-design this to guarantee room for rejection messages
+            // possibly pre-calculate whether rejections are needed.
+            responseSize = CalculateMessageSize(bytesRemaining, sizeof(Nrp_Message_Reject), msgCount);
+            if(responseSize > 0)
             {
-                pNrp_Message_Reject rejectMsg = GenerateRejectHeader(rejections.size(), (pNrp_Header_Message) tempMsgBuffer.get());
-                for(Nrp_Message_Reject rej : rejections)
+                // Allocate buffer for rejection messages
+                tempMsgBuffer = make_unique<unsigned char[]>(responseSize);
+
+                // generate rejection
+                if(tempMsgBuffer != nullptr)
                 {
-                    rejectMsg = GenerateRejectMessage((nrpd_reject_reason) rej.reason, (nrpd_msg_type)rej.msgType, rejectMsg);
+                    pNrp_Message_Reject rejectMsg = GenerateRejectHeader(msgCount, (pNrp_Header_Message) tempMsgBuffer.get());
+                    for(Nrp_Message_Reject& rej : rejections)
+                    {
+                        if((void*)rejectMsg >= NextMessage(tempMsgBuffer.get(), sizeof(Nrp_Header_Message) + (msgCount * sizeof(Nrp_Message_Reject))))
+                        {
+                            // Gross hack to prevent a buffer overflow of tempMsgBuffer when
+                            // msgCount is less than rejections.size()
+                            break;
+                        }
+
+                        rejectMsg = GenerateRejectMessage((nrpd_reject_reason) rej.reason, (nrpd_msg_type)rej.msgType, rejectMsg);
+                    }
                 }
+                // Put rejections first
+                msgs.push_front(move(tempMsgBuffer));
             }
-            // Put rejections first
-            msgs.push_front(move(tempMsgBuffer));
         }
 
         return true;

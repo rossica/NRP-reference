@@ -49,8 +49,17 @@ namespace nrpd
         return m_clientReceiveTimeout;
     }
 
-    int NrpdConfig::activeServerCount(bool ipv6)
+    int NrpdConfig::ActiveServerCount(nrpd_msg_type type)
     {
+        bool ipv6;
+
+        if(type != ip4peers && type != ip6peers)
+        {
+            return 0;
+        }
+
+        ipv6 = (type == ip6peers) ? true : false;
+
         int count = 0;
         // The list of servers should never get large enough that iterating
         // to calculate this every call will be a burden.
@@ -65,10 +74,19 @@ namespace nrpd
         return count;
     }
 
-    unique_ptr<unsigned char[]> NrpdConfig::GetServerList(bool ipv6, int count, int& out_size)
+    unique_ptr<unsigned char[]> NrpdConfig::GetServerList(nrpd_msg_type type, int count, int& outSize)
     {
+        bool ipv6;
+
+        if((type != ip4peers && type != ip6peers) || count <= 0)
+        {
+            return nullptr;
+        }
+
+        ipv6 = (type == ip6peers) ? true : false;
+
         // Optimization: Is this calculation necessary?
-        int actualCount = activeServerCount(ipv6);
+        int actualCount = ActiveServerCount(type);
         unique_ptr<unsigned char[]> srvlist;
         pNrp_Message_Ip4Peer ip4Msg;
         pNrp_Message_Ip6Peer ip6Msg;
@@ -84,6 +102,8 @@ namespace nrpd
         }
 
         srvlist = make_unique<unsigned char[]>(size);
+
+        outSize = size;
 
         if(ipv6)
         {

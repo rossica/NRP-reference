@@ -125,7 +125,7 @@ bool TestStructSizes()
     return result;
 }
 
-bool TestCreateRequest()
+bool TestProtocolCreateRequest()
 {
     char buffer[1024];
     pNrp_Header_Message msg, nextmsg;
@@ -345,10 +345,11 @@ bool TestCreateRequest()
     return true;
 }
 
-bool TestCreateResponse()
+bool TestProtocolCreateResponse()
 {
     unsigned char buffer[1024], entropy[8];
     pNrp_Header_Message msg;
+    pNrp_Message_Reject rej;
     unsigned int msgCount = 4;
     unsigned int countIp4addr = 2;
     unsigned int countEntropy = 8;
@@ -410,9 +411,18 @@ bool TestCreateResponse()
 
     remainingSize -= (sizeof(Nrp_Header_Message) + countEntropy);
 
-    msg = GenerateRejectMessage(nrpd_reject_reason::unsupported, nrpd_msg_type::pubkey, msg);
+    // TODO: remove this hard-coded 1
+    rej = GenerateRejectHeader(1, msg);
 
-    if(msg == nullptr)
+    if(rej == nullptr)
+    {
+        cout << "Failed to create reject header." << endl;
+        return false;
+    }
+
+    rej = GenerateRejectMessage(nrpd_reject_reason::unsupported, nrpd_msg_type::pubkey, rej);
+
+    if(rej == nullptr)
     {
         cout << "Failed to create reject message." << endl;
         return false;
@@ -431,3 +441,26 @@ bool TestCreateResponse()
     return true;
 }
 
+bool TestServerCalculateMessageSize()
+{
+    // TODO: positive and negative test cases for NrpdServer::CalculateMessageSize
+    return false;
+}
+
+bool TestServerGeneratePeersResponse()
+{
+    // TODO: positive and negative test cases for NrpdServer::GeneratePeersResponse
+    return false;
+}
+
+bool TestConfigGetServerList()
+{
+    // TODO: positive and negative test cases for NrpdConfig::GetServerList
+    return false;
+}
+
+bool TestConfigActiveServerCount()
+{
+    // TODO: positive and negative test cases for NrpdConfig::ActiveServerCount
+    return false;
+}

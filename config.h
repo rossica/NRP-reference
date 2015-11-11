@@ -3,6 +3,8 @@
 #include <list>
 #include <memory>
 
+#include "protocol.h"
+
 #pragma once
 
 using namespace std;
@@ -36,8 +38,8 @@ namespace nrpd
         int clientRequestInterval();
         int receiveTimeout();
         char* entropyServerAddress();
-        int activeServerCount(bool ipv6);
-        unique_ptr<unsigned char[]> GetServerList(bool ipv6, int count, int& out_size);
+        int ActiveServerCount(nrpd_msg_type type);
+        unique_ptr<unsigned char[]> GetServerList(nrpd_msg_type type, int count, int& outSize);
 
     private:
         string m_configPath;

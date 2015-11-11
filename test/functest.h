@@ -4,7 +4,19 @@
 bool TestStructSizes();
 
 // A test to validate the request creation and validation functions
-bool TestCreateRequest();
+bool TestProtocolCreateRequest();
 
 // A test to validate the response creation and validation functions
-bool TestCreateResponse();
+bool TestProtocolCreateResponse();
+
+// A test to validate server calculation of message size
+bool TestServerCalculateMessageSize();
+
+// A test to validate server generation of peers response messages
+bool TestServerGeneratePeersResponse();
+
+// A test to validate config counting of active servers
+bool TestConfigActiveServerCount();
+
+// A test to validate config generation of a flat server list
+bool TestConfigGetServerList();

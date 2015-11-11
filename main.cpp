@@ -24,10 +24,12 @@ int main(int argc, char* argv[])
 {
     pid_t pid = 0, sid = 0;
     int retCode = 0;
-    shared_ptr<NrpdConfig> config(new NrpdConfig);
+    shared_ptr<NrpdConfig> config;
     shared_ptr<NrpdServer> server;
 
-    if(config  == NULL)
+    config = make_shared<NrpdConfig>();
+
+    if(config == nullptr)
     {
         return 254;
     }
