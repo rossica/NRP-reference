@@ -24,8 +24,8 @@ client.o:  client.cpp client.h protocol.h
 main.o:  main.cpp server.h config.h
 	$(CC) $(CXXFLAGS) -c main.cpp -o obj/main.o
 
-test:  protocol.o 
-	$(CC) $(CXXFLAGS) test/main.cpp test/functest.cpp obj/protocol.o -o bin/testnrpd
+test:  protocol.o config.o server.o
+	$(CC) $(CXXFLAGS) test/main.cpp test/functest.cpp obj/protocol.o obj/config.o obj/server.o -o bin/testnrpd
 
 clean:
 	rm -f obj/*.o bin/nrpd bin/testnrpd

@@ -8,6 +8,7 @@ int main(int argc, char* argv[])
     result = TestStructSizes();
     result = TestProtocolCreateRequest();
     result = TestProtocolCreateResponse();
+    result = TestServerCalculateMessageSize();
 
     if(!result)
     {

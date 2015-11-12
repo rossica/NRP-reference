@@ -1,9 +1,16 @@
 #include <iostream>
 #include <memory>
+#include <list>
 #include <string.h>
 #include <arpa/inet.h>
 
 #include "../protocol.h"
+
+// This is a hack-y way to accomplish this, but I don't philosophically agree
+// with the alternatives.
+#define private public
+#include "../server.h"
+#undef private
 
 using namespace std;
 using namespace nrpd;
@@ -437,14 +444,47 @@ bool TestProtocolCreateResponse()
     // TODO: Add negative test cases for response packets.
 
 
-    cout << "All response packet creation/validation tests passed!" << endl;
+    cout << "All response packet creation/validation tests passed!" << endl << endl;
     return true;
 }
 
 bool TestServerCalculateMessageSize()
 {
-    // TODO: positive and negative test cases for NrpdServer::CalculateMessageSize
-    return false;
+    struct TestCaseCalcMsgSize
+    {
+        int available;
+        int size;
+        int count;
+        int expectedResult;
+        int expectedCount;
+    };
+
+    int result = 0;
+    auto cases = std::list<TestCaseCalcMsgSize>({
+                                                {2, 2, 3, 0, 3},
+                                                {8, 2, 2, 8, 2},
+                                                {5, 2, 1, 0, 1},
+                                                {7, 2, 2, 6, 1}});
+    auto server = make_unique<NrpdServer>();
+
+    for(auto& test : cases)
+    {
+        result = server->CalculateMessageSize(test.available, test.size, test.count);
+        if(result != test.expectedResult )
+        {
+            cout << "CalculateMessageSize returned: " << result << ". Expected: " << test.expectedResult << endl;
+            return false;
+        }
+
+        if(test.count != test.expectedCount)
+        {
+            cout << "CalculateMessageSize changed msgCount: " << test.count << ". Expected: " << test.expectedCount << endl;
+            return false;
+        }
+    }
+
+    cout << "NrpdServer::CalculateMessageSize passed all tests!" << endl << endl;
+    return true;
 }
 
 bool TestServerGeneratePeersResponse()
