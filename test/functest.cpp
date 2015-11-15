@@ -3,6 +3,8 @@
 #include <list>
 #include <string.h>
 #include <arpa/inet.h>
+#include <random>
+#include <time.h>
 
 #include "../protocol.h"
 
@@ -11,6 +13,16 @@
 #define private public
 #include "../server.h"
 #undef private
+
+
+struct TestCaseCalcMsgSize
+{
+    int available;
+    int size;
+    int count;
+    int expectedResult;
+    int expectedCount;
+};
 
 using namespace std;
 using namespace nrpd;
@@ -448,17 +460,60 @@ bool TestProtocolCreateResponse()
     return true;
 }
 
+// The purpose of this is to generate random inputs that should be handled by
+// the function appropriately.
+void GenerateCalcMsgSizeTestCase(std::list<TestCaseCalcMsgSize>& cases)
+{
+    int avail;
+    int size;
+    int count;
+    int expectedResult;
+    int expectedCount;
+
+    int temp;
+
+    srand(time(nullptr));
+
+    /// Generate an avail too small for a header
+    avail = rand() % sizeof(Nrp_Header_Message);
+    size = rand() % MAX_RESPONSE_MESSAGE_SIZE;
+    count = rand() % MAX_BYTE;
+    expectedResult = 0;
+    expectedCount = count;
+    cases.push_back({avail, size, count, expectedResult, expectedCount});
+
+    /// Generate an avail larger than a header, but smaller than header and 1 msg
+    count = 2 + (rand() % (MAX_BYTE-2));
+    size = 1 + (rand() % ((MAX_RESPONSE_MESSAGE_SIZE / count) - 1));
+    avail = sizeof(Nrp_Header_Message) + 1 + (rand() % (size - 1));
+    expectedResult = 0;
+    expectedCount = count;
+    cases.push_back({avail, size, count, expectedResult, expectedCount});
+
+    /// Generate an avail large enough for data + header
+    temp = MAX_RESPONSE_MESSAGE_SIZE - sizeof(Nrp_Header_Message);
+    count = 1 + (rand() % (MAX_BYTE-1));
+    size = 1 + (rand() % ((temp / count) - 1));
+    temp = sizeof(Nrp_Header_Message) + (size * count);
+    avail = temp + (rand() % (MAX_RESPONSE_MESSAGE_SIZE - temp));
+    expectedCount = count;
+    expectedResult = sizeof(Nrp_Header_Message) + (size * count);
+    cases.push_back({avail, size, count, expectedResult, expectedCount});
+
+    /// Generate an avail large enough for header and some data, but not all data
+    count = 2 + (rand() % (MAX_BYTE - 2));
+    temp = MAX_RESPONSE_MESSAGE_SIZE - sizeof(Nrp_Header_Message);
+    size = 1 + (rand() % ((temp / count) - 1));
+    temp = 1 + (rand() % (count - 1)); // generate a count less than above
+    avail = sizeof(Nrp_Header_Message) + (rand() % (size * temp));
+    expectedCount = (avail - sizeof(Nrp_Header_Message) ) / size;
+    expectedResult = sizeof(Nrp_Header_Message) + (expectedCount * size);
+
+    cases.push_back({avail, size, count, expectedResult, expectedCount});
+}
+
 bool TestServerCalculateMessageSize()
 {
-    struct TestCaseCalcMsgSize
-    {
-        int available;
-        int size;
-        int count;
-        int expectedResult;
-        int expectedCount;
-    };
-
     int result = 0;
     auto cases = std::list<TestCaseCalcMsgSize>({
                                                 {2, 2, 3, 0, 3},
@@ -466,6 +521,9 @@ bool TestServerCalculateMessageSize()
                                                 {5, 2, 1, 0, 1},
                                                 {7, 2, 2, 6, 1}});
     auto server = make_unique<NrpdServer>();
+
+    GenerateCalcMsgSizeTestCase(cases);
+    GenerateCalcMsgSizeTestCase(cases);
 
     for(auto& test : cases)
     {
