@@ -63,7 +63,7 @@ namespace nrpd
         int count = 0;
         // The list of servers should never get large enough that iterating
         // to calculate this every call will be a burden.
-        for(ServerRecord rec : m_activeServers)
+        for(ServerRecord& rec : m_activeServers)
         {
             if(rec.ipv6 == ipv6)
             {
@@ -76,6 +76,12 @@ namespace nrpd
 
     unique_ptr<unsigned char[]> NrpdConfig::GetServerList(nrpd_msg_type type, int count, int& outSize)
     {
+        unique_ptr<unsigned char[]> srvlist;
+        pNrp_Message_Ip4Peer ip4Msg;
+        pNrp_Message_Ip6Peer ip6Msg;
+        int size;
+        int itr = 0;
+        int actualCount;
         bool ipv6;
 
         if((type != ip4peers && type != ip6peers) || count <= 0)
@@ -86,19 +92,22 @@ namespace nrpd
         ipv6 = (type == ip6peers) ? true : false;
 
         // Optimization: Is this calculation necessary?
-        int actualCount = ActiveServerCount(type);
-        unique_ptr<unsigned char[]> srvlist;
-        pNrp_Message_Ip4Peer ip4Msg;
-        pNrp_Message_Ip6Peer ip6Msg;
-        int size;
+        actualCount = ActiveServerCount(type);
+
+        if(actualCount <= 0)
+        {
+            return nullptr;
+        }
+
+        actualCount = min(actualCount, count);
 
         if(ipv6)
         {
-            size = min(actualCount, count) * sizeof(Nrp_Message_Ip6Peer);
+            size = actualCount * sizeof(Nrp_Message_Ip6Peer);
         }
         else
         {
-            size = min(actualCount, count) * sizeof(Nrp_Message_Ip4Peer);
+            size = actualCount* sizeof(Nrp_Message_Ip4Peer);
         }
 
         srvlist = make_unique<unsigned char[]>(size);
@@ -133,6 +142,13 @@ namespace nrpd
                     ip4Msg->port = rec.port;
                     ip4Msg++;
                 }
+                itr++;
+            }
+
+            // Exit the loop when requested count of servers are copied
+            if(itr >= actualCount)
+            {
+                break;
             }
         }
 

@@ -9,6 +9,8 @@ int main(int argc, char* argv[])
     result = TestProtocolCreateRequest();
     result = TestProtocolCreateResponse();
     result = TestServerCalculateMessageSize();
+    result = TestConfigActiveServerCount();
+    result = TestConfigGetServerList();
 
     if(!result)
     {

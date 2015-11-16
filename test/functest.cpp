@@ -12,8 +12,12 @@
 // with the alternatives.
 #define private public
 #include "../server.h"
+#include "../config.h"
 #undef private
 
+
+using namespace std;
+using namespace nrpd;
 
 struct TestCaseCalcMsgSize
 {
@@ -24,8 +28,22 @@ struct TestCaseCalcMsgSize
     int expectedCount;
 };
 
-using namespace std;
-using namespace nrpd;
+struct TestCaseActiveServerCount
+{
+    shared_ptr<NrpdConfig> config;
+    nrpd_msg_type type;
+    int expectedCount;
+};
+
+struct TestCaseGetServerList
+{
+    shared_ptr<NrpdConfig> config;
+    nrpd_msg_type type;
+    int count;
+    int outSize;
+    bool expectedNullptr;
+    int expectedSize;
+};
 
 void TestPlatformAlignment()
 {
@@ -470,9 +488,9 @@ void GenerateCalcMsgSizeTestCase(std::list<TestCaseCalcMsgSize>& cases)
     int expectedResult;
     int expectedCount;
 
-    int temp;
+    int temp = time(nullptr); // 1447588177; // useful constant for testing
 
-    srand(time(nullptr));
+    srand(temp);
 
     /// Generate an avail too small for a header
     avail = rand() % sizeof(Nrp_Header_Message);
@@ -505,9 +523,9 @@ void GenerateCalcMsgSizeTestCase(std::list<TestCaseCalcMsgSize>& cases)
     temp = MAX_RESPONSE_MESSAGE_SIZE - sizeof(Nrp_Header_Message);
     size = 1 + (rand() % ((temp / count) - 1));
     temp = 1 + (rand() % (count - 1)); // generate a count less than above
-    avail = sizeof(Nrp_Header_Message) + (rand() % (size * temp));
-    expectedCount = (avail - sizeof(Nrp_Header_Message) ) / size;
-    expectedResult = sizeof(Nrp_Header_Message) + (expectedCount * size);
+    avail = sizeof(Nrp_Header_Message) + ((size * temp)) + (rand() % size);
+    expectedCount = temp;
+    expectedResult = sizeof(Nrp_Header_Message) + (temp * size);
 
     cases.push_back({avail, size, count, expectedResult, expectedCount});
 }
@@ -516,10 +534,10 @@ bool TestServerCalculateMessageSize()
 {
     int result = 0;
     auto cases = std::list<TestCaseCalcMsgSize>({
-                                                {2, 2, 3, 0, 3},
-                                                {8, 2, 2, 8, 2},
-                                                {5, 2, 1, 0, 1},
-                                                {7, 2, 2, 6, 1}});
+                    {2, 2, 3, 0, 3}, // available space less than header
+                    {8, 2, 2, 8, 2}, // available space enough for header and messages
+                    {5, 2, 1, 0, 1}, // available space more than header, less than header + 1 message
+                    {7, 2, 2, 6, 1}}); // available space more than header + 1 message, less than header + requested messages
     auto server = make_unique<NrpdServer>();
 
     GenerateCalcMsgSizeTestCase(cases);
@@ -528,7 +546,7 @@ bool TestServerCalculateMessageSize()
     for(auto& test : cases)
     {
         result = server->CalculateMessageSize(test.available, test.size, test.count);
-        if(result != test.expectedResult )
+        if(result != test.expectedResult)
         {
             cout << "CalculateMessageSize returned: " << result << ". Expected: " << test.expectedResult << endl;
             return false;
@@ -553,12 +571,183 @@ bool TestServerGeneratePeersResponse()
 
 bool TestConfigGetServerList()
 {
-    // TODO: positive and negative test cases for NrpdConfig::GetServerList
-    return false;
+    unique_ptr<unsigned char[]> result;
+    shared_ptr<NrpdConfig> tempConfig;
+    std::list<TestCaseGetServerList> cases;
+    pNrp_Message_Ip4Peer ip4Msg;
+    pNrp_Message_Ip6Peer ip6Msg;
+    int count;
+
+    /// Negative test cases
+    tempConfig = make_shared<NrpdConfig>();
+    cases.push_back({tempConfig, ip4peers, 1, 0, true, 0}); // no active ip4 servers
+    cases.push_back({tempConfig, ip6peers, 1, 0, true, 0}); // no active ip6 servers
+    cases.push_back({tempConfig, entropy, 1, 0, true, 0}); // bad type
+    cases.push_back({tempConfig, ip4peers, -1, 0, true, 0}); // bad count value
+
+    /// ip4 test cases
+    tempConfig = make_shared<NrpdConfig>();
+    tempConfig->m_activeServers.push_back({{1,2,3,4}, false, 1234, 0, 0});
+    tempConfig->m_activeServers.push_back({{5,6,7,8}, false, 5678, 0, 0});
+
+    cases.push_back({tempConfig, ip4peers, 1, 0 ,false, sizeof(Nrp_Message_Ip4Peer)});
+    cases.push_back({tempConfig, ip4peers, 2, 0, false, 2 * sizeof(Nrp_Message_Ip4Peer)});
+    cases.push_back({tempConfig, ip6peers, 1, 0, true, 0}); // no ip6 servers
+
+    /// ip6 test cases
+    tempConfig = make_shared<NrpdConfig>();
+    tempConfig->m_activeServers.push_back({{0,1,2,3,4,5,6,7,8,9,0xa,0xb,0xc,0xd,0xe,0xf}, true, 4321, 0, 0});
+    tempConfig->m_activeServers.push_back({{0xf,0xe,0xd,0xc,0xb,0xa,9,8,7,6,5,4,3,2,1,0}, true, 1234, 0, 0});
+
+    cases.push_back({tempConfig, ip6peers, 1, 0, false, sizeof(Nrp_Message_Ip6Peer)});
+    cases.push_back({tempConfig, ip6peers, 2, 0, false, 2 * sizeof(Nrp_Message_Ip6Peer)});
+    cases.push_back({tempConfig, ip4peers, 1, 0, true, 0}); // no ip4 servers
+
+    /// Mixed test cases
+    tempConfig = make_shared<NrpdConfig>();
+    tempConfig->m_activeServers.push_back({{1,2,3,4}, false, 1234, 0, 0});
+    tempConfig->m_activeServers.push_back({{0,1,2,3,4,5,6,7,8,9,0xa,0xb,0xc,0xd,0xe,0xf}, true, 4321, 0, 0});
+    tempConfig->m_activeServers.push_back({{5,6,7,8}, false, 5678, 0, 0});
+    tempConfig->m_activeServers.push_back({{0xf,0xe,0xd,0xc,0xb,0xa,9,8,7,6,5,4,3,2,1,0}, true, 1234, 0, 0});
+
+    cases.push_back({tempConfig, ip4peers, 1, 0 ,false, sizeof(Nrp_Message_Ip4Peer)});
+    cases.push_back({tempConfig, ip4peers, 2, 0, false, 2 * sizeof(Nrp_Message_Ip4Peer)});
+    cases.push_back({tempConfig, ip6peers, 1, 0, false, sizeof(Nrp_Message_Ip6Peer)});
+    cases.push_back({tempConfig, ip6peers, 2, 0, false, 2 * sizeof(Nrp_Message_Ip6Peer)});
+
+
+
+    for(auto& test : cases)
+    {
+        count = 0;
+        result = test.config->GetServerList(test.type, test.count, test.outSize);
+
+        if(test.expectedNullptr)
+        {
+            if(result.get() != nullptr)
+            {
+                cout << "GetServerList returned memory. Expected nullptr" << endl;
+                //return false;
+            }
+        }
+        else
+        {
+            if(result.get() == nullptr)
+            {
+                cout << "GetServerList returned nullptr. Expected memory" << endl;
+                //return false;
+            }
+
+            if(test.outSize != test.expectedSize)
+            {
+                cout << "GetServerList output size: " << test.outSize << ". Expected: " << test.expectedSize << endl;
+                return false;
+            }
+
+            /// Validate the data copied correctly
+            if(test.type == ip4peers)
+            {
+                ip4Msg = (pNrp_Message_Ip4Peer) result.get();
+
+                for(auto& rec : test.config->m_activeServers)
+                {
+                    if((test.type == ip6peers) == rec.ipv6)
+                    {
+                        if(ip4Msg->port != rec.port)
+                        {
+                            cout << "Copied port is: " << ip4Msg->port << ". Expected: " << rec.port << endl;
+                            return false;
+                        }
+
+                        if(memcmp(ip4Msg->ip, rec.host4, sizeof(ip4Msg->ip)))
+                        {
+                            cout << "Copied IPv4 address doesn't match! Fail." << endl;
+                            return false;
+                        }
+
+                        // increment pointer and counter
+                        ip4Msg++;
+                        count++;
+                    }
+
+                    // Exit the loop when all messages have been compared
+                    if(count >= test.count)
+                    {
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                ip6Msg = (pNrp_Message_Ip6Peer) result.get();
+
+                for(auto& rec : test.config->m_activeServers)
+                {
+                    if((test.type == ip6peers) == rec.ipv6)
+                    {
+                        if(ip6Msg->port != rec.port)
+                        {
+                            cout << "Copied port is: " << ip6Msg->port << ". Expected: " << rec.port << endl;
+                            return false;
+                        }
+
+                        if(memcmp(ip6Msg->ip, rec.host6, sizeof(ip6Msg->ip)))
+                        {
+                            cout << "Copied IPv6 address doesn't match! Fail." << endl;
+                            return false;
+                        }
+
+                        // increment pointer and counter
+                        ip6Msg++;
+                        count++;
+                    }
+
+                    // Exit the loop when all messages have been compared
+                    if(count >= test.count)
+                    {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    cout << "NrpdConfig::GetServerList passed all tests!" << endl << endl;
+    return true;
 }
 
 bool TestConfigActiveServerCount()
 {
-    // TODO: positive and negative test cases for NrpdConfig::ActiveServerCount
-    return false;
+    shared_ptr<NrpdConfig> tempConfig;
+    std::list<TestCaseActiveServerCount> cases;
+    int count;
+
+    /// Test with empty active server list
+    tempConfig = make_shared<NrpdConfig>();
+    cases.push_back({tempConfig, ip4peers, 0});
+    cases.push_back({tempConfig, ip6peers, 0});
+    cases.push_back({tempConfig, entropy, 0});
+
+    /// Test with some fake servers
+    tempConfig = make_shared<NrpdConfig>();
+    tempConfig->m_activeServers.push_back({{1,2,3,4}, false, 1234, 0, 0});
+    tempConfig->m_activeServers.push_back({{0,1,2,3,4,5,6,7,8,9,0xa,0xb,0xc,0xd,0xe,0xf}, true, 4321, 0, 0});
+    tempConfig->m_activeServers.push_back({{5,6,7,8}, false, 1234, 0, 0});
+
+    cases.push_back({tempConfig, ip4peers, 2});
+    cases.push_back({tempConfig, ip6peers, 1});
+
+
+    for(auto& test : cases)
+    {
+        count = test.config->ActiveServerCount(test.type);
+        if(count != test.expectedCount)
+        {
+            cout << "ActiveServerCount returned: " << count << ". Expected: " << test.expectedCount << endl;
+            return false;
+        }
+    }
+
+    cout << "NrpdConfig::ActiveServerCount passed all tests!" << endl << endl;
+    return true;
 }
