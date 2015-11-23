@@ -11,6 +11,7 @@ int main(int argc, char* argv[])
     result = TestServerCalculateMessageSize();
     result = TestConfigActiveServerCount();
     result = TestConfigGetServerList();
+    result = TestServerGeneratePeersResponse();
 
     if(!result)
     {

@@ -157,6 +157,14 @@ namespace nrpd
             msgCount = min(m_config->ActiveServerCount(type), msgCount);
         }
 
+        if(msgCount == 0)
+        {
+            // No servers of requested type, fail
+            // Note: this should be caught by GenenerateResponsePeersMessage, but
+            // failing here saves the work of a memory allocation/deallocation
+            return nullptr;
+        }
+
         // Calculate size of response
         outResponseSize = CalculateMessageSize(CalculateRemainingBytes(availableBytes, rejCount), size, msgCount);
         if(outResponseSize == 0)
@@ -170,7 +178,7 @@ namespace nrpd
 
         data = m_config->GetServerList(type, msgCount, dataSize);
 
-        if(GenerateResponsePeersMessage(type, msgCount, data.get(), dataSize, (pNrp_Header_Message) tempMsgBuffer.get()))
+        if(GenerateResponsePeersMessage(type, msgCount, data.get(), outResponseSize, (pNrp_Header_Message) tempMsgBuffer.get()))
         {
             return tempMsgBuffer;
         }
@@ -201,6 +209,8 @@ namespace nrpd
         {
             return false;
         }
+
+        bytesRemaining -= sizeof(Nrp_Header_Packet);
 
         currentMsg = pkt->messages;
 

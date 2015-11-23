@@ -5,6 +5,7 @@
 #include <arpa/inet.h>
 #include <random>
 #include <time.h>
+#include <math.h>
 
 #include "../protocol.h"
 
@@ -44,6 +45,40 @@ struct TestCaseGetServerList
     bool expectedNullptr;
     int expectedSize;
 };
+
+struct TestCaseGenPeersResponse
+{
+    shared_ptr<NrpdServer> server;
+    nrpd_msg_type type;
+    int msgCount;
+    int availableBytes;
+    int rejCount;
+    int responseSize;
+    bool expectedNullptr;
+    int expectedResponseSize;
+};
+
+void GenerateConfigFakeActiveServers(shared_ptr<NrpdConfig>& config, int ip4Count, int ip6Count)
+{
+    std::mt19937 mt(time(nullptr));
+    std::uniform_int_distribution<unsigned char> dis(0, 255); // IP byte
+    std::uniform_int_distribution<unsigned short> dis2(0,65535); // port number
+
+    int end = max(ip4Count, ip6Count);
+
+    for(int i = 0, j = 0; max(i,j) < end; i++, j++)
+    {
+        if(i < ip4Count)
+        {
+            config->m_activeServers.push_back({{{dis(mt), dis(mt), dis(mt), dis(mt)}}, false, dis2(mt), 0, 0L});
+        }
+
+        if(j < ip6Count)
+        {
+            config->m_activeServers.push_back({{{dis(mt), dis(mt), dis(mt), dis(mt), dis(mt), dis(mt), dis(mt), dis(mt), dis(mt), dis(mt), dis(mt), dis(mt), dis(mt), dis(mt), dis(mt), dis(mt)}}, true, dis2(mt), 0, 0L});
+        }
+    }
+}
 
 void TestPlatformAlignment()
 {
@@ -488,9 +523,7 @@ void GenerateCalcMsgSizeTestCase(std::list<TestCaseCalcMsgSize>& cases)
     int expectedResult;
     int expectedCount;
 
-    int temp = time(nullptr); // 1447588177; // useful constant for testing
-
-    srand(temp);
+    int temp;
 
     /// Generate an avail too small for a header
     avail = rand() % sizeof(Nrp_Header_Message);
@@ -540,6 +573,8 @@ bool TestServerCalculateMessageSize()
                     {7, 2, 2, 6, 1}}); // available space more than header + 1 message, less than header + requested messages
     auto server = make_unique<NrpdServer>();
 
+    srand(time(nullptr)); // 1447588177; // useful constant for testing
+
     GenerateCalcMsgSizeTestCase(cases);
     GenerateCalcMsgSizeTestCase(cases);
 
@@ -565,8 +600,189 @@ bool TestServerCalculateMessageSize()
 
 bool TestServerGeneratePeersResponse()
 {
-    // TODO: positive and negative test cases for NrpdServer::GeneratePeersResponse
-    return false;
+    shared_ptr<NrpdConfig> tempConfig;
+    shared_ptr<NrpdServer> tempServer;
+    unique_ptr<unsigned char[]> result;
+    std::list<TestCaseGenPeersResponse> cases;
+    nrpd_msg_type type;
+    int msgCount;
+    int availableBytes;
+    int rejCount;
+    int expectedResponseSize;
+    int temp;
+
+
+    srand(time(nullptr));
+
+    tempConfig = make_shared<NrpdConfig>();
+    GenerateConfigFakeActiveServers(tempConfig, 256, 256);
+
+    tempServer = make_shared<NrpdServer>(tempConfig);
+
+    /// Test cases:
+    /// enough space for peers response as requested
+    type = ip4peers;
+    msgCount = 2;
+    availableBytes = sizeof(Nrp_Header_Message) + (msgCount * sizeof(Nrp_Message_Ip4Peer));
+    cases.push_back({tempServer, type, msgCount, availableBytes, 0, 0, false, availableBytes});
+
+    type = ip6peers;
+    msgCount = 3;
+    availableBytes = sizeof(Nrp_Header_Message) + (msgCount * sizeof(Nrp_Message_Ip6Peer));
+    cases.push_back({tempServer, type, msgCount, availableBytes, 0, 0, false, availableBytes});
+
+    msgCount = 1 + (rand() % (MAX_BYTE - 1)); // guarantee at least 1 message
+    type = (((rand() % 2) == 0) ? ip4peers : ip6peers); // randomly select type
+    temp = ((type == ip4peers) ? sizeof(Nrp_Message_Ip4Peer) : sizeof(Nrp_Message_Ip6Peer));
+    temp = sizeof(Nrp_Header_Message) + (msgCount * temp);
+    availableBytes = temp + (rand() % (MAX_RESPONSE_MESSAGE_SIZE - temp));
+    cases.push_back({tempServer, type, msgCount, availableBytes, 0, 0, false, temp});
+
+
+    /// enough space for peers response with rejections
+    msgCount = 1;
+    type = ip4peers;
+    expectedResponseSize = sizeof(Nrp_Header_Message) + (msgCount * sizeof(Nrp_Message_Ip4Peer));
+    rejCount = 2;
+    temp = sizeof(Nrp_Header_Message) + (rejCount * sizeof(Nrp_Message_Reject));
+    availableBytes = temp + expectedResponseSize;
+    cases.push_back({tempServer, type, msgCount, availableBytes, rejCount, 0, false, expectedResponseSize});
+
+    msgCount = 1;
+    type = ip6peers;
+    expectedResponseSize = sizeof(Nrp_Header_Message) + (msgCount * sizeof(Nrp_Message_Ip6Peer));
+    rejCount = 2;
+    temp = sizeof(Nrp_Header_Message) + (rejCount * sizeof(Nrp_Message_Reject));
+    availableBytes = temp + expectedResponseSize;
+    cases.push_back({tempServer, type, msgCount, availableBytes, rejCount, 0, false, expectedResponseSize});
+
+    msgCount = 1 + (rand() % (MAX_BYTE - 1)); // guarantee at least 1 message
+    type = (((rand() % 2) == 0) ? ip4peers : ip6peers); // randomly select type
+    temp = ((type == ip4peers) ? sizeof(Nrp_Message_Ip4Peer) : sizeof(Nrp_Message_Ip6Peer));
+    rejCount = 1 + (rand() % 10); // realistically, there wont be more than 5 rejections
+    expectedResponseSize = sizeof(Nrp_Header_Message) + (msgCount * temp); // Calculate size of peers message
+    temp = expectedResponseSize + sizeof(Nrp_Header_Message) + (rejCount * sizeof(Nrp_Message_Reject)); // add size of reject message
+    availableBytes = temp + (rand() % (MAX_RESPONSE_MESSAGE_SIZE - temp));
+    cases.push_back({tempServer, type, msgCount, availableBytes, rejCount, 0, false, expectedResponseSize});
+
+
+    /// not enough space for peers response as requested, but with fewer msgs
+    msgCount = 2;
+    type = ip4peers;
+    rejCount = 0;
+    expectedResponseSize = sizeof(Nrp_Header_Message) + sizeof(Nrp_Message_Ip4Peer);
+    availableBytes = expectedResponseSize;
+    cases.push_back({tempServer, type, msgCount, availableBytes, rejCount, 0, false, expectedResponseSize});
+
+    msgCount = 2;
+    type = ip6peers;
+    rejCount = 0;
+    expectedResponseSize = sizeof(Nrp_Header_Message) + sizeof(Nrp_Message_Ip6Peer);
+    availableBytes = expectedResponseSize;
+    cases.push_back({tempServer, type, msgCount, availableBytes, rejCount, 0, false, expectedResponseSize});
+
+    msgCount = 2 + (rand() % (MAX_BYTE - 2)); // guarantee at least 2 messages
+    rejCount = 0;
+    type = (((rand() % 2) == 0) ? ip4peers : ip6peers); // randomly select type
+    temp = ((type == ip4peers) ? sizeof(Nrp_Message_Ip4Peer) : sizeof(Nrp_Message_Ip6Peer));
+    expectedResponseSize = sizeof(Nrp_Header_Message) + ((1 + (rand() % msgCount - 1)) * temp);
+    availableBytes = expectedResponseSize + (rand() % temp);
+    cases.push_back({tempServer, type, msgCount, availableBytes, rejCount, 0, false, expectedResponseSize});
+
+
+    /// not enough space for peers response, with rejections, but with fewer msgs
+    msgCount = 4;
+    type = ip4peers;
+    rejCount = 2;
+    expectedResponseSize = sizeof(Nrp_Header_Message) + ((msgCount - 2) * sizeof(Nrp_Message_Ip4Peer)); // rejection header + 2 rejections uses up 2 ip4peers messages
+    availableBytes = sizeof(Nrp_Header_Message) + (msgCount * sizeof(Nrp_Message_Ip4Peer));
+    cases.push_back({tempServer, type, msgCount, availableBytes, rejCount, 0, false, expectedResponseSize});
+
+    msgCount = 2;
+    type = ip6peers;
+    rejCount = 6;
+    expectedResponseSize = sizeof(Nrp_Header_Message) + sizeof(Nrp_Message_Ip6Peer);
+    availableBytes = sizeof(Nrp_Header_Message) + (msgCount * sizeof(Nrp_Message_Ip6Peer));
+    cases.push_back({tempServer, type, msgCount, availableBytes, rejCount, 0, false, expectedResponseSize});
+
+    rejCount = 1 + (rand() % 9);
+    type = (((rand() % 2) == 0) ? ip4peers : ip6peers); // randomly select type
+    msgCount = 2 + (rand() % MAX_BYTE - 2);
+    temp = ((type == ip4peers) ? sizeof(Nrp_Message_Ip4Peer) : sizeof(Nrp_Message_Ip6Peer));
+    availableBytes = sizeof(Nrp_Header_Message) + (msgCount * temp);
+    expectedResponseSize = availableBytes - (sizeof(Nrp_Header_Message) + (rejCount * sizeof(Nrp_Message_Reject))); // remove size of reject messages
+    expectedResponseSize = (expectedResponseSize - sizeof(Nrp_Header_Message)) / temp; // get the number of peer messages that'll fit
+    expectedResponseSize = sizeof(Nrp_Header_Message) + (expectedResponseSize * temp); // Calculate actual expected response size
+    cases.push_back({tempServer, type, msgCount, availableBytes, rejCount, 0, false, expectedResponseSize});
+
+
+    /// not enough space for peers response at all
+    msgCount = 1 + (rand() % (MAX_BYTE - 1));
+    type = (((rand() % 2) == 0) ? ip4peers : ip6peers); // randomly select type
+    temp = ((type == ip4peers) ? sizeof(Nrp_Message_Ip4Peer) : sizeof(Nrp_Message_Ip6Peer));
+    availableBytes = rand() % (sizeof(Nrp_Header_Message) + temp);
+    rejCount = 0;
+    expectedResponseSize = 0;
+    cases.push_back({tempServer, type, msgCount, availableBytes, rejCount, 0, true, expectedResponseSize});
+
+
+    /// not enough space for peers response with rejections
+    rejCount = 1 + (rand() % 9);
+    type = (((rand() % 2) == 0) ? ip4peers : ip6peers); // randomly select type
+    availableBytes = sizeof(Nrp_Header_Message) + (rejCount * sizeof(Nrp_Message_Reject));
+    msgCount = 1 + (rand() % (MAX_BYTE - 1));
+    expectedResponseSize = 0;
+    cases.push_back({tempServer, type, msgCount, availableBytes, rejCount, 0, true, expectedResponseSize});
+
+
+    /// No servers to select
+    msgCount = 1 + (rand() % (MAX_BYTE - 1));
+    type = (((rand() % 2) == 0) ? ip4peers : ip6peers); // randomly select type
+    temp = ((type == ip4peers) ? sizeof(Nrp_Message_Ip4Peer) : sizeof(Nrp_Message_Ip6Peer));
+    availableBytes = sizeof(Nrp_Header_Message) + (msgCount * temp);
+    expectedResponseSize = 0;
+    rejCount = 0;
+    tempConfig = make_shared<NrpdConfig>();
+    tempServer = make_shared<NrpdServer>(tempConfig);
+    cases.push_back({tempServer, type, msgCount, availableBytes, rejCount, 0, true, expectedResponseSize});
+
+    for(auto& test : cases)
+    {
+        result = test.server->GeneratePeersResponse(test.type, test.msgCount, test.availableBytes, test.rejCount, test.responseSize);
+
+        if(test.expectedNullptr)
+        {
+            if(result != nullptr)
+            {
+                cout << "GeneratePeersResponse returned memory. Expected nullptr." << endl;
+                return false;
+            }
+        }
+        else
+        {
+            if(result == nullptr)
+            {
+                cout << "GeneratePeersResponse returned nullptr. Expected memory." << endl;
+                return false;
+            }
+
+            if(test.responseSize != test.expectedResponseSize)
+            {
+                cout << "GeneratePeersResponse returned size: " << test.responseSize << ". Expected: " << test.expectedResponseSize << endl;
+                return false;
+            }
+
+            if(!ValidateMessageHeader((pNrp_Header_Message) result.get(), false))
+            {
+                cout << "GeneratePeersResponse returned invalid message. Expected valid message." << endl;
+                return false;
+            }
+
+        }
+    }
+
+    cout << "NrpdServer::GeneratePeersResponse passed all tests!" << endl << endl;
+    return true;
 }
 
 bool TestConfigGetServerList()
