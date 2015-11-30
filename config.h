@@ -32,6 +32,7 @@ namespace nrpd
         NrpdConfig(string*);
 
         unsigned short port();
+        int defaultEntropyResponse();
         bool enableServer();
         bool enableClient();
         bool daemonize();
@@ -55,6 +56,7 @@ namespace nrpd
 
         int m_clientRequestIntervalSeconds;
         int m_clientReceiveTimeout;
+        int m_defaultEntropyResponse;
 
 
     };

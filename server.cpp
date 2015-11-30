@@ -198,7 +198,7 @@ namespace nrpd
 
         if(size <= 0)
         {
-            size = DEFAULT_ENTROPY_SIZE;
+            size = m_config->defaultEntropyResponse();
         }
 
         actualSize = CalculateMessageSize(bytesRemaining, 1, size);

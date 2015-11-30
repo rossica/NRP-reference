@@ -15,6 +15,9 @@ bool TestServerCalculateMessageSize();
 // A test to validate server generation of peers response messages
 bool TestServerGeneratePeersResponse();
 
+// A test to validate server generation of entropy response messages
+bool TestServerGenerateEntropyResponse();
+
 // A test to validate config counting of active servers
 bool TestConfigActiveServerCount();
 

@@ -16,6 +16,7 @@ namespace nrpd
         m_entropyServerAddress = nullptr;
         m_clientRequestIntervalSeconds = 60;
         m_clientReceiveTimeout = 5;
+        m_defaultEntropyResponse = DEFAULT_ENTROPY_SIZE;
     }
 
     NrpdConfig::NrpdConfig(string* path)
@@ -27,6 +28,11 @@ namespace nrpd
     unsigned short NrpdConfig::port()
     {
         return m_port;
+    }
+
+    int NrpdConfig::defaultEntropyResponse()
+    {
+        return m_defaultEntropyResponse;
     }
 
     bool NrpdConfig::enableServer()

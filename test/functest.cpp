@@ -58,6 +58,16 @@ struct TestCaseGenPeersResponse
     int expectedResponseSize;
 };
 
+struct TestCaseGenEntropyResponse
+{
+    shared_ptr<NrpdServer> server;
+    int size;
+    int bytesRemaining;
+    int responseSize;
+    bool expectedNullptr;
+    int expectedResponseSize;
+};
+
 void GenerateConfigFakeActiveServers(shared_ptr<NrpdConfig>& config, int ip4Count, int ip6Count)
 {
     std::mt19937 mt(time(nullptr));
@@ -782,6 +792,76 @@ bool TestServerGeneratePeersResponse()
     }
 
     cout << "NrpdServer::GeneratePeersResponse passed all tests!" << endl << endl;
+    return true;
+}
+
+bool TestServerGenerateEntropyResponse()
+{
+    int err;
+    std::list<TestCaseGenEntropyResponse> cases;
+    shared_ptr<NrpdServer> tempServer;
+    shared_ptr<NrpdConfig> tempConfig;
+    unique_ptr<unsigned char[]> result;
+
+
+    tempConfig = make_shared<NrpdConfig>();
+
+    tempServer = make_shared<NrpdServer>(tempConfig);
+
+    if((err = tempServer->InitializeServer()) != EXIT_SUCCESS)
+    {
+        cout << "Failed to initialize server. Error: " << err << endl;
+        return false;
+    }
+
+    /// Success case
+    cases.push_back({tempServer, 8, 12, 0, false, 12});
+    /// Default entropy size
+    cases.push_back({tempServer, 0, 16, 0, false, 12});
+    /// Not enough size for message header
+    cases.push_back({tempServer, 12, 3, 0, true, 0});
+    /// Not enough size for requested message
+    cases.push_back({tempServer, 8, 6, 0, false, 6});
+    /// 1 byte of entropy
+    cases.push_back({tempServer, 1, 6, 0, false, 5});
+    // TODO: Add test cases for error paths reading from random device
+    // for example: open a crafted file to read from as the random device
+
+    for(TestCaseGenEntropyResponse& test : cases)
+    {
+        result = test.server->GenerateEntropyResponse(test.size, test.bytesRemaining, test.responseSize);
+
+        if(test.expectedNullptr)
+        {
+            if(result != nullptr)
+            {
+                cout << "GenerateEntropyResponse returned memory. Expected nullptr" << endl;
+                return false;
+            }
+        }
+        else
+        {
+            if(result == nullptr)
+            {
+                cout << "GenerateEntropyResponse returned nullptr. Expected memory" << endl;
+                return false;
+            }
+
+            if(test.responseSize != test.expectedResponseSize)
+            {
+                cout << "GenerateEntropyResponse returned response: " << test.responseSize << ". Expected: " << test.expectedResponseSize << endl;
+                return false;
+            }
+
+            if(!ValidateMessageHeader((pNrp_Header_Message) result.get(), false))
+            {
+                cout << "GenerateEntropyResponse returned invalid entropy message. Expected valid message" << endl;
+                return false;
+            }
+        }
+    }
+
+    cout << "NrpdServer::GenerateEntropyResponse passed all tests!" << endl << endl;
     return true;
 }
 

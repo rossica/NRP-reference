@@ -12,6 +12,7 @@ int main(int argc, char* argv[])
     result = TestConfigActiveServerCount();
     result = TestConfigGetServerList();
     result = TestServerGeneratePeersResponse();
+    result = TestServerGenerateEntropyResponse();
 
     if(!result)
     {
