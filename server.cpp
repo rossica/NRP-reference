@@ -129,7 +129,7 @@ namespace nrpd
         }
     }
 
-    unique_ptr<unsigned char[]> NrpdServer::GeneratePeersResponse(nrpd_msg_type type, int msgCount, int availableBytes, int rejCount, int& outResponseSize)
+    unique_ptr<unsigned char[]> NrpdServer::GeneratePeersResponse(nrpd_msg_type type, int msgCount, int availableBytes, int& outResponseSize)
     {
         int size = 0;
         int dataSize = 0;
@@ -166,7 +166,7 @@ namespace nrpd
         }
 
         // Calculate size of response
-        outResponseSize = CalculateMessageSize(CalculateRemainingBytes(availableBytes, rejCount), size, msgCount);
+        outResponseSize = CalculateMessageSize(availableBytes, size, msgCount);
         if(outResponseSize == 0)
         {
             // Not enough room for this message
@@ -281,7 +281,7 @@ namespace nrpd
             case ip4peers:
             case ip6peers:
                 // TODO: Check config for whether this is enabled
-                tempMsgBuffer = GeneratePeersResponse((nrpd_msg_type) currentMsg->msgType, currentMsg->countOrSize, bytesRemaining, rejections.size(), responseSize);
+                tempMsgBuffer = GeneratePeersResponse((nrpd_msg_type) currentMsg->msgType, currentMsg->countOrSize, CalculateRemainingBytes(bytesRemaining, rejections.size()), responseSize);
                 break;
             case entropy:
                 tempMsgBuffer = GenerateEntropyResponse(currentMsg->countOrSize, CalculateRemainingBytes(bytesRemaining, rejections.size()), responseSize);

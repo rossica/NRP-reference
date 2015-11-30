@@ -50,7 +50,7 @@ namespace nrpd
         int CalculateRemainingBytes(int availableBytes, int rejCount);
 
         // Parse a peers request message and generate a peers response
-        unique_ptr<unsigned char[]> GeneratePeersResponse(nrpd_msg_type type, int msgCount, int availableBytes, int rejCount, int& outResponseSize);
+        unique_ptr<unsigned char[]> GeneratePeersResponse(nrpd_msg_type type, int msgCount, int availableBytes, int& outResponseSize);
 
         // Parse an entropy request message and generate an entropy response
         unique_ptr<unsigned char[]> GenerateEntropyResponse(int size, int bytesRemaining, int& outResponseSize);
