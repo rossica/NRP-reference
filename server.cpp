@@ -85,33 +85,33 @@ namespace nrpd
     }
 
 
-    int NrpdServer::CalculateMessageSize(int availableBytes, int messageSize, int& messageCount)
+    unsigned int NrpdServer::CalculateMessageSize(unsigned int availableBytes, int messageSize, int& messageCount)
     {
-        int responseSize = 0;
+        unsigned int responseSize = 0;
 
         // Enough room for a header?
-        if(availableBytes < sizeof(Nrp_Header_Message))
+        if(availableBytes < NRP_MESSAGE_HEADER_SIZE)
         {
             // no room for a header
             return responseSize;
         }
 
         // Enough room for the requested message?
-        responseSize = sizeof(Nrp_Header_Message) + (messageSize * messageCount);
+        responseSize = NRP_MESSAGE_HEADER_SIZE + (messageSize * messageCount);
         if(availableBytes >= responseSize)
         {
             return responseSize;
         }
 
         // Calculate as many messages will fit
-        int availableMessageCount = (availableBytes - sizeof(Nrp_Header_Message)) / messageSize;
+        int availableMessageCount = (availableBytes - NRP_MESSAGE_HEADER_SIZE) / messageSize;
         if(availableMessageCount == 0)
         {
             // Can't fit any messages; bail.
             return availableMessageCount;
         }
 
-        responseSize = sizeof(Nrp_Header_Message) + (messageSize * availableMessageCount);
+        responseSize = NRP_MESSAGE_HEADER_SIZE + (messageSize * availableMessageCount);
         messageCount = availableMessageCount;
         return responseSize;
     }
@@ -121,7 +121,7 @@ namespace nrpd
     {
         if(rejCount > 0)
         {
-            return availableBytes - (sizeof(Nrp_Header_Message) + (rejCount * sizeof(Nrp_Message_Reject)));
+            return availableBytes - (NRP_MESSAGE_HEADER_SIZE + (rejCount * sizeof(Nrp_Message_Reject)));
         }
         else
         {
@@ -188,6 +188,63 @@ namespace nrpd
         }
     }
 
+    unique_ptr<unsigned char[]> NrpdServer::GenerateEntropyResponse(int size, int bytesRemaining, int& outResponseSize)
+    {
+        int actualSize = 0;
+        int dataSize = 0;
+        int readSize = 0;
+        unique_ptr<unsigned char[]> tempMsgBuffer;
+        unique_ptr<unsigned char[]> data;
+
+        if(size <= 0)
+        {
+            size = DEFAULT_ENTROPY_SIZE;
+        }
+
+        actualSize = CalculateMessageSize(bytesRemaining, 1, size);
+        outResponseSize = 0;
+
+        if(actualSize == 0)
+        {
+            // Not enough space for the message at all
+            return nullptr;
+        }
+
+        dataSize = actualSize - NRP_MESSAGE_HEADER_SIZE;
+
+        data = make_unique<unsigned char []>(dataSize);
+
+        readSize = read(m_randomfd, data.get(), dataSize);
+
+        if(readSize < 0)
+        {
+            // TODO Log errno here
+            return nullptr;
+        }
+        else if(readSize == 0)
+        {
+            // TODO log EOF here
+            return nullptr;
+        }
+        else if(readSize < dataSize)
+        {
+            // If the read was less than requested, recalculate the message size
+            actualSize = NRP_MESSAGE_HEADER_SIZE + readSize;
+        }
+
+        tempMsgBuffer = make_unique<unsigned char[]>(actualSize);
+
+        if(GenerateResponseEntropyMessage(readSize, data.get(), actualSize, (pNrp_Header_Message) tempMsgBuffer.get()))
+        {
+            outResponseSize = actualSize;
+            return tempMsgBuffer;
+        }
+        else
+        {
+            return nullptr;
+        }
+    }
+
 
     bool NrpdServer::ParseMessages(pNrp_Header_Request pkt, std::list<unique_ptr<unsigned char[]>>& msgs)
     {
@@ -200,7 +257,7 @@ namespace nrpd
         int responseSize;
         int msgCount;
 
-        if(bytesRemaining <= sizeof(Nrp_Header_Packet))
+        if(bytesRemaining <= NRP_PACKET_HEADER_SIZE)
         {
             return false;
         }
@@ -210,12 +267,12 @@ namespace nrpd
             return false;
         }
 
-        bytesRemaining -= sizeof(Nrp_Header_Packet);
+        bytesRemaining -= NRP_PACKET_HEADER_SIZE;
 
         currentMsg = pkt->messages;
 
         // Iterate through all messages
-        while(currentMsg < EndOfPacket(pkt) && bytesRemaining > 0)
+        while(currentMsg < EndOfPacket(pkt) && CalculateRemainingBytes(bytesRemaining, rejections.size()) > 0)
         {
             responseSize = 0;
 
@@ -223,14 +280,11 @@ namespace nrpd
             {
             case ip4peers:
             case ip6peers:
+                // TODO: Check config for whether this is enabled
                 tempMsgBuffer = GeneratePeersResponse((nrpd_msg_type) currentMsg->msgType, currentMsg->countOrSize, bytesRemaining, rejections.size(), responseSize);
-                if(tempMsgBuffer == nullptr)
-                {
-                    // Memory allocation failed inside GeneratePeersResponse.
-                    responseSize = 0;
-                }
                 break;
             case entropy:
+                tempMsgBuffer = GenerateEntropyResponse(currentMsg->countOrSize, CalculateRemainingBytes(bytesRemaining, rejections.size()), responseSize);
                 break;
             case pubkey:
             case secureentropy:
@@ -271,7 +325,7 @@ namespace nrpd
                     pNrp_Message_Reject rejectMsg = GenerateRejectHeader(msgCount, (pNrp_Header_Message) tempMsgBuffer.get());
                     for(Nrp_Message_Reject& rej : rejections)
                     {
-                        if((void*)rejectMsg >= NextMessage(tempMsgBuffer.get(), sizeof(Nrp_Header_Message) + (msgCount * sizeof(Nrp_Message_Reject))))
+                        if((void*)rejectMsg >= NextMessage(tempMsgBuffer.get(), NRP_MESSAGE_HEADER_SIZE + (msgCount * sizeof(Nrp_Message_Reject))))
                         {
                             // Gross hack to prevent a buffer overflow of tempMsgBuffer when
                             // msgCount is less than rejections.size()

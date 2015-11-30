@@ -76,6 +76,9 @@ namespace nrpd
 #define MAX_RESPONSE_MESSAGE_SIZE (65507) // Realistically should be less than MTU
 #define MAX_REJECT_MESSAGE_SIZE sizeof(Nrp_Header_Message) + (MAX_BYTE * sizeof(Nrp_Message_Reject))
 #define RESPONSE_HEADER_SIZE sizeof(Nrp_Header_Response)
+#define DEFAULT_ENTROPY_SIZE (8)
+#define NRP_PACKET_HEADER_SIZE ((int) sizeof(Nrp_Header_Packet))
+#define NRP_MESSAGE_HEADER_SIZE ((int) sizeof(Nrp_Header_Message))
 
     // Advance message pointer by length of message
     pNrp_Header_Message NextMessage(pNrp_Header_Message msg);

@@ -66,14 +66,14 @@ void GenerateConfigFakeActiveServers(shared_ptr<NrpdConfig>& config, int ip4Coun
 
     int end = max(ip4Count, ip6Count);
 
-    for(int i = 0, j = 0; max(i,j) < end; i++, j++)
+    for(int i = 0; i < end; i++)
     {
         if(i < ip4Count)
         {
             config->m_activeServers.push_back({{{dis(mt), dis(mt), dis(mt), dis(mt)}}, false, dis2(mt), 0, 0L});
         }
 
-        if(j < ip6Count)
+        if(i < ip6Count)
         {
             config->m_activeServers.push_back({{{dis(mt), dis(mt), dis(mt), dis(mt), dis(mt), dis(mt), dis(mt), dis(mt), dis(mt), dis(mt), dis(mt), dis(mt), dis(mt), dis(mt), dis(mt), dis(mt)}}, true, dis2(mt), 0, 0L});
         }

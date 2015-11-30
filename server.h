@@ -43,7 +43,7 @@ namespace nrpd
         // Returns 0 if there's not enough space for the message.
         // messageCount will be updated with the count of messages,
         // of size messageSize, that fit in availableBytes.
-        int CalculateMessageSize(int availableBytes, int messageSize, int& messageCount);
+        unsigned int CalculateMessageSize(unsigned int availableBytes, int messageSize, int& messageCount);
 
         // Calculate a running total of bytes available based on the number of
         // rejection messages already generated.
@@ -51,6 +51,9 @@ namespace nrpd
 
         // Parse a peers request message and generate a peers response
         unique_ptr<unsigned char[]> GeneratePeersResponse(nrpd_msg_type type, int msgCount, int availableBytes, int rejCount, int& outResponseSize);
+
+        // Parse an entropy request message and generate an entropy response
+        unique_ptr<unsigned char[]> GenerateEntropyResponse(int size, int bytesRemaining, int& outResponseSize);
 
     };
 }
