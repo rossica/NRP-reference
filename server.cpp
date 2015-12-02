@@ -161,7 +161,7 @@ namespace nrpd
         {
             // No servers of requested type, fail
             // Note: this should be caught by GenenerateResponsePeersMessage, but
-            // failing here saves the work of a memory allocation/deallocation
+            // failing here saves the work of allocating/deallocating tempMsgBuffer
             return nullptr;
         }
 
@@ -175,6 +175,11 @@ namespace nrpd
 
         // Allocate and generate response
         tempMsgBuffer = make_unique<unsigned char[]>(outResponseSize);
+
+        if(tempMsgBuffer == nullptr)
+        {
+            return nullptr;
+        }
 
         data = m_config->GetServerList(type, msgCount, dataSize);
 
@@ -214,6 +219,12 @@ namespace nrpd
 
         data = make_unique<unsigned char []>(dataSize);
 
+        if(data == nullptr)
+        {
+            return nullptr;
+        }
+
+        // Read entropy from random device
         readSize = read(m_randomfd, data.get(), dataSize);
 
         if(readSize < 0)
@@ -229,6 +240,7 @@ namespace nrpd
         else if(readSize < dataSize)
         {
             // If the read was less than requested, recalculate the message size
+            // Log this; shouldn't happen in practice
             actualSize = NRP_MESSAGE_HEADER_SIZE + readSize;
         }
 
@@ -246,7 +258,7 @@ namespace nrpd
     }
 
 
-    bool NrpdServer::ParseMessages(pNrp_Header_Request pkt, std::list<unique_ptr<unsigned char[]>>& msgs)
+    bool NrpdServer::ParseMessages(pNrp_Header_Request pkt, int& outMessageLength, std::list<unique_ptr<unsigned char[]>>& msgs)
     {
         std::list<Nrp_Message_Reject> rejections;
         pNrp_Header_Message currentMsg;
@@ -267,6 +279,8 @@ namespace nrpd
             return false;
         }
 
+        outMessageLength = 0;
+
         bytesRemaining -= NRP_PACKET_HEADER_SIZE;
 
         currentMsg = pkt->messages;
@@ -280,8 +294,14 @@ namespace nrpd
             {
             case ip4peers:
             case ip6peers:
-                // TODO: Check config for whether this is enabled
-                tempMsgBuffer = GeneratePeersResponse((nrpd_msg_type) currentMsg->msgType, currentMsg->countOrSize, CalculateRemainingBytes(bytesRemaining, rejections.size()), responseSize);
+                if(m_config->enablePeersResponse((nrpd_msg_type) currentMsg->msgType))
+                {
+                    tempMsgBuffer = GeneratePeersResponse((nrpd_msg_type) currentMsg->msgType, currentMsg->countOrSize, CalculateRemainingBytes(bytesRemaining, rejections.size()), responseSize);
+                }
+                else
+                {
+                    rejections.push_back({currentMsg->msgType, unsupported});
+                }
                 break;
             case entropy:
                 tempMsgBuffer = GenerateEntropyResponse(currentMsg->countOrSize, CalculateRemainingBytes(bytesRemaining, rejections.size()), responseSize);
@@ -299,6 +319,7 @@ namespace nrpd
             {
                 msgs.push_back(move(tempMsgBuffer));
                 bytesRemaining -= responseSize;
+                outMessageLength += responseSize;
             }
 
             currentMsg = NextMessage(currentMsg);
@@ -309,10 +330,7 @@ namespace nrpd
         {
             msgCount = rejections.size();
 
-            // It's possible there's not enough room for rejections
             // Calculate if we can fit the entire rejection message
-            // TODO: re-design this to guarantee room for rejection messages
-            // possibly pre-calculate whether rejections are needed.
             responseSize = CalculateMessageSize(bytesRemaining, sizeof(Nrp_Message_Reject), msgCount);
             if(responseSize > 0)
             {
@@ -329,14 +347,18 @@ namespace nrpd
                         {
                             // Gross hack to prevent a buffer overflow of tempMsgBuffer when
                             // msgCount is less than rejections.size()
+                            // This should never occur in practice.
+                            // TODO: log if this happens. Shouldn't ever happen
                             break;
                         }
 
                         rejectMsg = GenerateRejectMessage((nrpd_reject_reason) rej.reason, (nrpd_msg_type)rej.msgType, rejectMsg);
                     }
+
+                    // Put rejections first
+                    msgs.push_front(move(tempMsgBuffer));
+                    outMessageLength += responseSize;
                 }
-                // Put rejections first
-                msgs.push_front(move(tempMsgBuffer));
             }
         }
 
@@ -358,10 +380,12 @@ namespace nrpd
         {
             sockaddr_storage srcAddr;
             socklen_t srcAddrLen = sizeof(srcAddr);
-            ssize_t count;
+            int count;
+            int messageLength;
+            std::list<unique_ptr<unsigned char[]>> msgs;
+            pNrp_Header_Message msg;
 
             unsigned char buffer[MAX_RESPONSE_MESSAGE_SIZE];
-            unsigned char entropy[MAX_BYTE];
 
 
             memset(buffer, 0, sizeof(buffer));
@@ -384,23 +408,32 @@ namespace nrpd
                 continue;
             }
 
-            // check if client has requested recently
+            // TODO: check if client has requested recently
 
             // parse messages in request
-
-            //if(syscall(SYS_getrandom,entropy, req->requestedEntropy, 0) < 0)
-            if(read(m_randomfd, entropy, 8/* TODO: replace with parsed value */) < 0)
+            if(!ParseMessages(req, messageLength, msgs))
             {
-                // TODO: log an error
-                return errno;
+                // TODO: log error
+                continue;
             }
 
-            count = 8 /* TODO: replace with parsed value */ + RESPONSE_HEADER_SIZE;
-            if(!GenerateResponseEntropyMessage(8/* TODO: replace with parsed value */, entropy, sizeof(buffer), (pNrp_Header_Message) buffer))
+            // generate packet header
+            msg = GeneratePacketHeader(messageLength, response, msgs.size(), (pNrp_Header_Packet) buffer);
+
+            // copy messages into buffer
+            // Note: Potential perf improvement could be had by using sendmsg
+            for(auto& buf : msgs)
             {
-                return -1;
+                pNrp_Header_Message msgptr = (pNrp_Header_Message) buf.get();
+                count = ntohs(msgptr->length);
+
+                memcpy(msg, buf.get(), count);
+
+                // advance the pointer to the end of the message
+                msg = NextMessage(msg);
             }
-            printf("generating response\n");
+
+            printf("sending response\n");
 
             // send generated packet
             if( (count = sendto(m_socketfd, buffer, count, 0, (sockaddr*) &srcAddr, srcAddrLen)) < 0)
@@ -408,6 +441,9 @@ namespace nrpd
                 // TODO: log some error
                 continue;
             }
+
+            // Clean up the list
+            msgs.clear();
         }
 
         return EXIT_SUCCESS;

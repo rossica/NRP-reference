@@ -35,7 +35,7 @@ namespace nrpd
 
         // Parse incoming request messages from a client and generate responses
         // as appropriate.
-        bool ParseMessages(pNrp_Header_Request pkt, std::list<unique_ptr<unsigned char[]>>& msgs);
+        bool ParseMessages(pNrp_Header_Request pkt, int& outMessageLength, std::list<unique_ptr<unsigned char[]>>& msgs);
 
         // Calculate maximal byte size for a message, given remaining space
         // in the response packet.

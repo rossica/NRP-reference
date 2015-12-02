@@ -45,6 +45,21 @@ namespace nrpd
         return m_enableClient;
     }
 
+    bool NrpdConfig::enablePeersResponse(nrpd_msg_type type)
+    {
+        if(type == ip4peers)
+        {
+            return m_enableIp4Peers;
+        }
+
+        if(type == ip6peers)
+        {
+            return m_enableIp6Peers;
+        }
+
+        return false;
+    }
+
     int NrpdConfig::clientRequestInterval()
     {
         return m_clientRequestIntervalSeconds;
@@ -117,6 +132,11 @@ namespace nrpd
         }
 
         srvlist = make_unique<unsigned char[]>(size);
+
+        if(srvlist == nullptr)
+        {
+            return nullptr;
+        }
 
         outSize = size;
 

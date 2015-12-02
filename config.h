@@ -35,6 +35,7 @@ namespace nrpd
         int defaultEntropyResponse();
         bool enableServer();
         bool enableClient();
+        bool enablePeersResponse(nrpd_msg_type type);
         bool daemonize();
         int clientRequestInterval();
         int receiveTimeout();
@@ -53,6 +54,8 @@ namespace nrpd
         char* m_entropyServerAddress;
         char* m_randomDevice;
         bool m_forkDaemon;
+        bool m_enableIp4Peers;
+        bool m_enableIp6Peers;
 
         int m_clientRequestIntervalSeconds;
         int m_clientReceiveTimeout;
