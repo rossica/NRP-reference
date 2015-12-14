@@ -79,6 +79,7 @@ namespace nrpd
 #define NRP_PACKET_HEADER_SIZE ((int) sizeof(Nrp_Header_Packet))
 #define NRP_MESSAGE_HEADER_SIZE ((int) sizeof(Nrp_Header_Message))
 #define RESPONSE_HEADER_SIZE NRP_PACKET_HEADER_SIZE
+#define CLIENT_MIN_RETRY_SECONDS (60)
 
     // Advance message pointer by length of message
     pNrp_Header_Message NextMessage(pNrp_Header_Message msg);

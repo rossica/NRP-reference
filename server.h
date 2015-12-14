@@ -1,5 +1,6 @@
 #include "config.h"
 #include "protocol.h"
+#include "clientmrucache.h"
 #include <memory>
 #include <list>
 
@@ -26,7 +27,7 @@ namespace nrpd
             running,
             stopping
         };
-
+        shared_ptr<ClientMRUCache> m_recentClients;
         shared_ptr<NrpdConfig> m_config;
         NrpdServerState m_state;
         int m_socketfd;

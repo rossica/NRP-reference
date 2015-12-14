@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+
 #include <errno.h>
 #include <fcntl.h>
 #include <linux/random.h>
@@ -79,6 +80,8 @@ namespace nrpd
             return errno;
         }
 
+        // Create recent clients hashmap
+        m_recentClients = make_shared<ClientMRUCache>(CLIENT_MIN_RETRY_SECONDS);
 
         m_state = initialized;
         return EXIT_SUCCESS;
@@ -382,6 +385,7 @@ namespace nrpd
             socklen_t srcAddrLen = sizeof(srcAddr);
             int count;
             int messageLength;
+            // TODO: make sure this is cleared every iteration, even on failure
             std::list<unique_ptr<unsigned char[]>> msgs;
             pNrp_Header_Message msg;
 
@@ -408,7 +412,12 @@ namespace nrpd
                 continue;
             }
 
-            // TODO: check if client has requested recently
+            // check if client has requested recently
+            if(m_recentClients->IsPresent(srcAddr))
+            {
+                // Ignore this client. They've talked to us too recently
+                continue;
+            }
 
             // parse messages in request
             if(!ParseMessages(req, messageLength, msgs))

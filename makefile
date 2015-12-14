@@ -1,16 +1,19 @@
 CC=g++
 DEBUG=-g
-CXXFLAGS=-std=c++14 -Wall -pedantic -fms-extensions $(DEBUG)
+CXXFLAGS=-std=c++14 -Wall -fms-extensions $(DEBUG)
 LFLAGS=-Wall $(DEBUG) -lpthread
 
 
 all: nrpd
 
-nrpd:	protocol.o config.o server.o client.o main.o
-	$(CC) $(LFLAGS) -o bin/nrpd obj/protocol.o obj/server.o obj/client.o obj/config.o obj/main.o
+nrpd:	protocol.o clientmrucache.o config.o server.o client.o main.o
+	$(CC) $(LFLAGS) -o bin/nrpd obj/protocol.o obj/clientmrucache.o obj/server.o obj/client.o obj/config.o obj/main.o
 
 protocol.o:  protocol.cpp protocol.h
 	$(CC) $(CXXFLAGS) -c protocol.cpp -o obj/protocol.o
+
+clientmrucache.o:  clientmrucache.cpp clientmrucache.h
+	$(CC) $(CXXFLAGS) -c clientmrucache.cpp -o obj/clientmrucache.o
 
 config.o:  config.cpp config.h
 	$(CC) $(CXXFLAGS) -c config.cpp -o obj/config.o
