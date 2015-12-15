@@ -22,13 +22,18 @@ namespace nrpd
 
     bool ClientMRUCache::Clean()
     {
-        for(auto& item : m_recentClients)
         {
-            if(time(nullptr) > item.second + m_lifetimeSeconds)
+            // Hold the lock for the duration of the iterator
+            lock_guard<mutex> lock(m_mutex);
+
+            for(auto& item : m_recentClients)
             {
-                m_recentClients.erase(item.first);
+                if(time(nullptr) > item.second + m_lifetimeSeconds)
+                {
+                    m_recentClients.erase(item.first);
+                }
             }
-        }
+        } // End of lock scope
 
         // TODO: Compute better heuristic for cleaning frequency
 
@@ -54,32 +59,38 @@ namespace nrpd
 
     bool ClientMRUCache::IsPresent(sockaddr_storage& addr)
     {
-        // attempt to insert address
-        pair<unordered_map<sockaddr_storage, time_t>::iterator, bool> const &result = m_recentClients.emplace(addr, time(nullptr));
         bool response = false;
-
-        // Failed to insert because it is already inserted
-        if(!result.second)
         {
-            // check whether client is expired or not
-            if(time(nullptr) >= result.second + m_lifetimeSeconds)
+            // Hold lock for duration of iterator
+            lock_guard<mutex> lock(m_mutex);
+
+            // attempt to insert address
+            pair<unordered_map<sockaddr_storage, time_t>::iterator, bool> const&
+                result = m_recentClients.emplace(addr, time(nullptr));
+
+            // Failed to insert because it is already inserted
+            if(!result.second)
             {
-                // Expired: return false, update time
-                response = false;
-                result.first->second = time(nullptr);
+                // check whether client is expired or not
+                if(time(nullptr) >= result.second + m_lifetimeSeconds)
+                {
+                    // Expired: return false, update time
+                    response = false;
+                    result.first->second = time(nullptr);
+                }
+                else
+                {
+                    // Client hasn't expired, and must still wait
+                    response = true;
+                }
             }
             else
             {
-                // Client hasn't expired, and must still wait
-                response = true;
+                // new client was inserted successfully
+                // therefore, they weren't already present
+                response = false;
             }
-        }
-        else
-        {
-            // new client was inserted successfully
-            // therefore, they weren't already present
-            response = false;
-        }
+        } // End of lock scope
 
         // schedule cleaning if it's been long enough since last cleaning
         ScheduleCleaning();

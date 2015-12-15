@@ -4,6 +4,7 @@
 #include <netinet/in.h>
 #include <time.h>
 #include <string.h>
+#include <mutex>
 
 #pragma once
 
@@ -98,6 +99,7 @@ namespace nrpd
         private:
             // TODO: Add some locking here so insert()s that cause rehashing don't invalidate
             // the cleaner's iterator.
+            mutex m_mutex;
             unordered_map<sockaddr_storage, time_t> m_recentClients;
             int m_lifetimeSeconds; // entry lifetime
             int m_cleanIntervalSeconds; // time between cleanings
