@@ -57,7 +57,7 @@ namespace nrpd
     }
 
 
-    bool ClientMRUCache::IsPresent(sockaddr_storage& addr)
+    bool ClientMRUCache::IsPresentAdd(sockaddr_storage& addr)
     {
         bool response = false;
         {
@@ -96,6 +96,21 @@ namespace nrpd
         ScheduleCleaning();
 
         return response;
+    }
+
+    bool ClientMRUCache::IsPresent(sockaddr_storage& addr)
+    {
+        lock_guard<mutex> lock(m_mutex);
+        return (m_recentClients.find(addr) != m_recentClients.end());
+    }
+
+    void ClientMRUCache::Add(sockaddr_storage& addr)
+    {
+        lock_guard<mutex> lock(m_mutex);
+        // Don't check whether the insertion succeeded or not because it's not
+        // important in this case.
+        m_recentClients.emplace(addr, time(nullptr));
+
     }
 }
 

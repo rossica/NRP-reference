@@ -95,10 +95,14 @@ namespace nrpd
             // If it exists, but has expired, returns false.
             // If it exists, but hasn't expired, returns true.
             // If it doesn't exist, inserts it and returns false.
+            bool IsPresentAdd(sockaddr_storage& addr);
+
+            // Check whether address is present without adding it
             bool IsPresent(sockaddr_storage& addr);
+
+            // Add address to the container
+            void Add(sockaddr_storage& addr);
         private:
-            // TODO: Add some locking here so insert()s that cause rehashing don't invalidate
-            // the cleaner's iterator.
             mutex m_mutex;
             unordered_map<sockaddr_storage, time_t> m_recentClients;
             int m_lifetimeSeconds; // entry lifetime

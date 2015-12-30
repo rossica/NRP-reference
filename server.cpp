@@ -413,7 +413,7 @@ namespace nrpd
             }
 
             // check if client has requested recently
-            if(m_recentClients->IsPresent(srcAddr))
+            if(m_recentClients->IsPresentAdd(srcAddr))
             {
                 // Ignore this client. They've talked to us too recently
                 continue;
