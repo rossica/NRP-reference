@@ -1,7 +1,7 @@
 #include <string>
 #include <netinet/in.h>
 #include <list>
-#include <set>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <atomic>
@@ -26,20 +26,30 @@ namespace nrpd
         unsigned short port; // This is in network byte order
         int failureCount;
         time_t lastaccessTime;
-        int retryTime;
-        struct
+        int retryTime; // how many seconds since lastaccessTime to wait
+        union
         {
-            unsigned char ipv6 : 1; // is server address ipv4 or ipv6?
-            unsigned char probationary : 1; // is server proven good?
-            unsigned char ip4Peers : 1; // does server support ipv4 peers?
-            unsigned char ip6Peers : 1; // does server support ipv6 peers?
-            unsigned char pubKey : 1; // does server support public key?
+            struct
+            {
+                unsigned short ipv6 : 1; // is server address ipv4 or ipv6?
+                unsigned short probationary : 1; // is server proven good?
+                unsigned short ip4Peers : 1; // does server support ipv4 peers?
+                unsigned short ip6Peers : 1; // does server support ipv6 peers?
+                unsigned short pubKey : 1; // does server support public key?
+                unsigned short reserved : 11; // reserved for future flags.
+            };
+            unsigned short flags; // Only used to set/clear all flags at once.
         };
 
-        constexpr bool operator==(ServerRecord const& rhs);
+        // Initializes the ServerRecord with all flags true, and all other
+        // fields set to zeroes.
+        void Initialize();
+
+        // Only compares ip addresses
+        constexpr bool operator==(ServerRecord const& rhs) const;
 
         // Defines ip4 servers as less-than ip6 servers
-        constexpr bool operator<(ServerRecord const& rhs);
+        constexpr bool operator<(ServerRecord const& rhs) const;
     };
 
     class NrpdConfig
@@ -89,9 +99,9 @@ namespace nrpd
         bool m_enableClient;
         shared_ptr<ClientMRUCache> m_bannedServers;
         list<ServerRecord> m_configuredServers;
-        list<ServerRecord> m_activeServers;
+        map<ServerRecord, ServerRecord> m_activeServers;
         list<ServerRecord> m_probationaryServers;
-        list<ServerRecord>::iterator m_activeIterator;
+        map<ServerRecord, ServerRecord>::iterator m_activeIterator;
         list<ServerRecord>::iterator m_probationaryIterator;
         atomic<int> m_countIp6Servers;
         atomic<int> m_countIp4Servers;

@@ -10,7 +10,7 @@ namespace nrpd
 
 /// ServerRecord member functions ///
 
-    constexpr bool ServerRecord::operator==(ServerRecord const& rhs)
+    constexpr bool ServerRecord::operator==(ServerRecord const& rhs) const
     {
         if(ipv6 != rhs.ipv6)
         {
@@ -39,7 +39,7 @@ namespace nrpd
         return true;
     }
 
-    constexpr bool ServerRecord::operator<(ServerRecord const& rhs)
+    constexpr bool ServerRecord::operator<(ServerRecord const& rhs) const
     {
         if(ipv6 != rhs.ipv6)
         {
@@ -77,6 +77,16 @@ namespace nrpd
                 return false;
             }
         }
+    }
+
+    void ServerRecord::Initialize()
+    {
+        memset(host6, 0, sizeof(host6));
+        port = 0;
+        failureCount = 0;
+        lastaccessTime = 0;
+        retryTime = 0;
+        flags = 0xFFFF;
     }
 
 
@@ -181,9 +191,9 @@ namespace nrpd
 
             // The list of servers should never get large enough that iterating
             // to calculate this every call will be a burden.
-            for(ServerRecord& rec : m_activeServers)
+            for(auto& rec : m_activeServers)
             {
-                if(rec.ipv6 == ipv6)
+                if(rec.second.ipv6 == ipv6)
                 {
                     count +=1;
                 }
@@ -201,6 +211,7 @@ namespace nrpd
 
         return count;
     }
+
 
     unique_ptr<unsigned char[]> NrpdConfig::GetServerList(nrpd_msg_type type, int count, int& outSize)
     {
@@ -262,20 +273,20 @@ namespace nrpd
 
             // TODO: find a way to rotate through this list so as not to return
             // the same servers every time.
-            for(ServerRecord& rec : m_activeServers)
+            for(auto& rec : m_activeServers)
             {
-                if(rec.ipv6 == ipv6)
+                if(rec.second.ipv6 == ipv6)
                 {
                     if(ipv6)
                     {
-                        memcpy(ip6Msg->ip, rec.host6, sizeof(ip6Msg->ip));
-                        ip6Msg->port = rec.port;
+                        memcpy(ip6Msg->ip, rec.second.host6, sizeof(ip6Msg->ip));
+                        ip6Msg->port = rec.second.port;
                         ip6Msg++;
                     }
                     else
                     {
-                        memcpy(ip4Msg->ip, rec.host4, sizeof(ip4Msg->ip));
-                        ip4Msg->port = rec.port;
+                        memcpy(ip4Msg->ip, rec.second.host4, sizeof(ip4Msg->ip));
+                        ip4Msg->port = rec.second.port;
                         ip4Msg++;
                     }
                     itr++;
@@ -326,7 +337,7 @@ namespace nrpd
             if(m_activeIterator != m_activeServers.end())
             {
                 m_prevReturnedProbationary = !m_prevReturnedProbationary;
-                return *m_activeIterator;
+                return (*m_activeIterator).second;
             }
             else if(m_probationaryIterator != m_probationaryServers.end())
             {
@@ -357,7 +368,7 @@ namespace nrpd
             {
                 // There are no probationary servers, so just return one
                 // from the active list.
-                return *m_activeIterator;
+                return (*m_activeIterator).second;
             }
             else
             {
@@ -380,8 +391,26 @@ namespace nrpd
         // Server has failed too many times, remove it
         if(serv.failureCount + 1 >= CLIENT_MAX_SERVER_TIMEOUT_COUNT)
         {
+            // Add server to banned list by copying IP address to temp sockaddr_storage
+            sockaddr_storage stor;
+            sockaddr_in& ip4Addr = (sockaddr_in&) stor;
+            sockaddr_in6& ip6Addr = (sockaddr_in6&) stor;
+
+            if(serv.ipv6)
+            {
+                stor.ss_family = AF_INET6;
+                memcpy(&(ip6Addr.sin6_addr), serv.host6, sizeof(ip6Addr.sin6_addr));
+            }
+            else
+            {
+                stor.ss_family = AF_INET;
+                memcpy(&(ip4Addr.sin_addr), serv.host4, sizeof(ip4Addr.sin_addr));
+            }
+
+            m_bannedServers->Add(stor);
+
             // remove from probationary list
-            if(serv.probationary == true)
+            if(serv.probationary)
             {
                 // Make sure the iterator matches before removal by iterator
                 if(serv == *m_probationaryIterator)
@@ -415,7 +444,7 @@ namespace nrpd
             else // remove from active list
             {
                 // Make sure the iterator matches before removal by iterator
-                if(serv == *m_activeIterator)
+                if(serv == (*m_activeIterator).second)
                 {
                     lock_guard<mutex> lock(m_activeMutex);
 
@@ -439,7 +468,7 @@ namespace nrpd
                     // TODO: log here
                     lock_guard<mutex> lock(m_activeMutex);
 
-                    m_activeServers.remove(serv);
+                    m_activeServers.erase(serv);
                 }
             }
         }
@@ -457,19 +486,22 @@ namespace nrpd
         {
             serv.probationary = false;
 
-            // TODO: don't add duplicates to the active server list
             {
                 lock_guard<mutex> lock(m_activeMutex);
                 // Add to the active server list under lock
-                m_activeServers.push_back(serv);
+                auto res = m_activeServers.emplace(serv, serv);
 
-                if(serv.ipv6)
+                // If a new element was added successfully
+                if(res.second == true)
                 {
-                    m_countIp6Servers += 1;
-                }
-                else
-                {
-                    m_countIp4Servers += 1;
+                    if(serv.ipv6)
+                    {
+                        m_countIp6Servers += 1;
+                    }
+                    else
+                    {
+                        m_countIp4Servers += 1;
+                    }
                 }
 
             } // end lock scope
@@ -494,5 +526,99 @@ namespace nrpd
                 m_probationaryServers.remove(serv);
             }
         }
+    }
+
+
+    bool NrpdConfig::AddServersFromMessage(pNrp_Header_Message msg)
+    {
+        sockaddr_storage stor;
+        ServerRecord rec;
+
+        if(msg == nullptr)
+        {
+            return false;
+        }
+
+        if(msg->msgType != ip4peers && msg->msgType != ip6peers)
+        {
+            return false;
+        }
+
+        if(msg->msgType == ip4peers)
+        {
+            pNrp_Message_Ip4Peer ip4Msg = (pNrp_Message_Ip4Peer) msg->content;
+
+            sockaddr_in& v4addr = (sockaddr_in&) stor;
+            stor.ss_family = AF_INET;
+
+            for(int i = 0; i < msg->countOrSize; i++, ip4Msg++)
+            {
+                // Copy IP into sockaddr struct to test whether it is banned
+                memcpy(&(v4addr.sin_addr), ip4Msg->ip, sizeof(v4addr.sin_addr));
+
+                if(m_bannedServers->IsPresent(stor))
+                {
+                    // Server is banned, don't add to the list
+                    continue;
+                }
+
+                // Create ServerRecord to test if the server already exists
+                rec.Initialize();
+                rec.ipv6 = false;
+                memcpy(rec.host4, ip4Msg->ip, sizeof(rec.host4));
+                rec.port = ip4Msg->port;
+                rec.retryTime = m_clientRequestIntervalSeconds;
+
+                if(m_activeServers.find(rec) != m_activeServers.end())
+                {
+                    // Server already in active servers list, don't add.
+                    continue;
+                }
+
+                // Server is not banned or already added, add it to
+                // probationary list.
+                m_probationaryServers.push_back(rec);
+            }
+        }
+        else // ip6 peers
+        {
+            pNrp_Message_Ip6Peer ip6Msg = (pNrp_Message_Ip6Peer) msg->content;
+
+            sockaddr_in6& v6addr = (sockaddr_in6&) stor;
+            stor.ss_family = AF_INET6;
+
+            for(int i = 0; i < msg->countOrSize; i++, ip6Msg++)
+            {
+                // Copy IP address into sockaddr to test whether it is banned
+                memcpy(&(v6addr.sin6_addr), ip6Msg->ip, sizeof(v6addr.sin6_addr));
+
+                if(m_bannedServers->IsPresent(stor))
+                {
+                    // Server is banned. Continue with the next one.
+                    continue;
+                }
+
+                // Create ServerRecord to test if this server was already
+                // added to the client.
+                rec.Initialize();
+                rec.ipv6 = true;
+                memcpy(rec.host6, ip6Msg->ip, sizeof(rec.host6));
+                rec.port = ip6Msg->port;
+                rec.retryTime = m_clientRequestIntervalSeconds;
+
+                if(m_activeServers.find(rec) != m_activeServers.end())
+                {
+                    // Server already active in list; don't add it.
+                    continue;
+                }
+
+                // Server is not banned or already added, add it to
+                // probationary list
+                m_probationaryServers.push_back(rec);
+            }
+
+        }
+
+        return true;
     }
 }
