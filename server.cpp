@@ -32,9 +32,9 @@ namespace nrpd
 
     NrpdServer::~NrpdServer()
     {
-        m_state = stopping;
+        m_state = destroying;
 
-        if(m_socketfd)
+        if(m_socketfd > 0)
         {
             close(m_socketfd);
         }
@@ -47,7 +47,7 @@ namespace nrpd
 
     int NrpdServer::InitializeServer()
     {
-        sockaddr_in host_addr;
+        sockaddr_in host_addr = {0};
 
         // TODO: make this configurable
         m_socketfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
@@ -56,7 +56,6 @@ namespace nrpd
             // insert error code here
             return errno;
         }
-        memset(&host_addr, 0, sizeof(sockaddr_in));
 
         host_addr.sin_port = htons(m_config->port());
         // TODO: get this from configuration

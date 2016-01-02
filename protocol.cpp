@@ -234,7 +234,8 @@ namespace nrpd
 
             // Validate rejection is for a valid message type
             if (msg->msgType >= nrpd_msg_type::nrpd_msg_type_max ||
-                msg->msgType < nrpd_msg_type::request_msg_min)
+                msg->msgType < nrpd_msg_type::request_msg_min ||
+                msg->msgType == nrpd_msg_type::entropy)
             {
                 return false;
             }

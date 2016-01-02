@@ -98,7 +98,6 @@ namespace nrpd
         m_configPath = "";
         m_enableServer = true;
         m_enableClient = true;
-        m_entropyServerAddress = nullptr;
         m_clientRequestIntervalSeconds = CLIENT_MIN_RETRY_SECONDS;
         m_clientReceiveTimeout = CLIENT_RESPONSE_TIMEOUT_SECONDS;
         m_defaultEntropyResponse = DEFAULT_ENTROPY_SIZE;
@@ -109,6 +108,8 @@ namespace nrpd
         m_prevReturnedProbationary = true;
         m_countIp6Servers = -1;
         m_countIp4Servers = -1;
+        m_clientEnableIp4 = true;
+        m_clientEnableIp6 = true;
     }
 
     NrpdConfig::NrpdConfig(string* path)
@@ -160,6 +161,16 @@ namespace nrpd
     int NrpdConfig::receiveTimeout()
     {
         return m_clientReceiveTimeout;
+    }
+
+    bool NrpdConfig::enableClientIp4()
+    {
+        return m_clientEnableIp4;
+    }
+
+    bool NrpdConfig::enableClientIp6()
+    {
+        return m_clientEnableIp6;
     }
 
     int NrpdConfig::ActiveServerCount(nrpd_msg_type type)

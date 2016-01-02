@@ -25,7 +25,8 @@ namespace nrpd
             notinitialized,
             initialized,
             running,
-            stopping
+            stopping,
+            destroying
         };
         shared_ptr<ClientMRUCache> m_recentClients;
         shared_ptr<NrpdConfig> m_config;

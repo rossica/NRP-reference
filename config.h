@@ -63,10 +63,11 @@ namespace nrpd
         bool enableServer();
         bool enableClient();
         bool enablePeersResponse(nrpd_msg_type type);
+        bool enableClientIp4();
+        bool enableClientIp6();
         bool daemonize();
         int clientRequestInterval();
         int receiveTimeout();
-        char* entropyServerAddress();
         int ActiveServerCount(nrpd_msg_type type);
         unique_ptr<unsigned char[]> GetServerList(nrpd_msg_type type, int count, int& outSize);
 
@@ -106,13 +107,14 @@ namespace nrpd
         atomic<int> m_countIp6Servers;
         atomic<int> m_countIp4Servers;
         bool m_prevReturnedProbationary;
-        char* m_entropyServerAddress;
-        char* m_randomDevice;
+        string m_randomDevice;
         bool m_forkDaemon;
         bool m_enableIp4Peers;
         bool m_enableIp6Peers;
         mutex m_activeMutex;
         mutex m_probationaryMutex;
+        bool m_clientEnableIp4;
+        bool m_clientEnableIp6;
 
         int m_clientRequestIntervalSeconds;
         int m_clientReceiveTimeout;
