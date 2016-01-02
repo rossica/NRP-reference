@@ -11,6 +11,7 @@
 #include <netinet/in.h>
 #include <signal.h>
 #include <unistd.h>
+#include <thread>
 
 
 #include "server.h"
@@ -23,16 +24,18 @@ int main(int argc, char* argv[])
 {
     pid_t pid = 0, sid = 0;
     int retCode = 0;
-    shared_ptr<NrpdConfig> config(new NrpdConfig);
+    shared_ptr<NrpdConfig> config;
     shared_ptr<NrpdServer> server;
 
-    if(config  == NULL)
+    config = make_shared<NrpdConfig>();
+
+    if(config == nullptr)
     {
         return 254;
     }
 
     server = make_shared<NrpdServer>(config);
-    
+
     // Fork in the background to daemonize
     // TODO: make this configurable
     //pid = fork();
@@ -76,11 +79,14 @@ int main(int argc, char* argv[])
         return EXIT_FAILURE;
     }
 
-    retCode = server->ServerLoop();
-    printf("%d", retCode);
 
-    
-     
+    thread serverThread(NrpdServer::ServerThread, server);
+    serverThread.join();
+    //retCode = server->ServerLoop();
+    //printf("%d", retCode);
+
+
+
 
     return EXIT_SUCCESS;
 }

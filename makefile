@@ -1,10 +1,34 @@
 CC=g++
 DEBUG=-g
-CXXFLAGS=-std=c++11 -Wall -pedantic -fms-extensions $(DEBUG)
-LFLAGS=-Wall $(DEBUG)
+CXXFLAGS=-std=c++14 -Wall -fms-extensions $(DEBUG)
+LFLAGS=-Wall $(DEBUG) -lpthread
 
-all:
-	$(CC) $(CXXFLAGS) main.cpp protocol.cpp config.cpp server.cpp client.cpp -o nrpd
+
+all: nrpd
+
+nrpd:	protocol.o clientmrucache.o config.o server.o client.o main.o
+	$(CC) $(LFLAGS) -o bin/nrpd obj/protocol.o obj/clientmrucache.o obj/server.o obj/client.o obj/config.o obj/main.o
+
+protocol.o:  protocol.cpp protocol.h
+	$(CC) $(CXXFLAGS) -c protocol.cpp -o obj/protocol.o
+
+clientmrucache.o:  clientmrucache.cpp clientmrucache.h
+	$(CC) $(CXXFLAGS) -c clientmrucache.cpp -o obj/clientmrucache.o
+
+config.o:  config.cpp config.h
+	$(CC) $(CXXFLAGS) -c config.cpp -o obj/config.o
+
+server.o:  server.cpp server.h protocol.h
+	$(CC) $(CXXFLAGS) -c server.cpp -o obj/server.o
+
+client.o:  client.cpp client.h protocol.h
+	$(CC) $(CXXFLAGS) -c client.cpp -o obj/client.o
+
+main.o:  main.cpp server.h config.h
+	$(CC) $(CXXFLAGS) -c main.cpp -o obj/main.o
+
+test:  protocol.o config.o server.o
+	$(CC) $(CXXFLAGS) test/main.cpp test/functest.cpp obj/protocol.o obj/config.o obj/server.o -o bin/testnrpd
 
 clean:
-	rm *.o nrpd
+	rm -f obj/*.o bin/nrpd bin/testnrpd
