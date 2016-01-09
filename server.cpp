@@ -24,6 +24,7 @@ namespace nrpd
 {
     NrpdServer::NrpdServer()
     {
+        //TODO: Eventually make this private.
     }
 
     NrpdServer::NrpdServer(shared_ptr<NrpdConfig> cfg) : m_config(cfg), m_state(notinitialized)
@@ -205,7 +206,7 @@ namespace nrpd
 
         if(size <= 0)
         {
-            size = m_config->defaultEntropyResponse();
+            size = m_config->defaultEntropySize();
         }
 
         actualSize = CalculateMessageSize(bytesRemaining, 1, size);
@@ -312,8 +313,10 @@ namespace nrpd
             case secureentropy:
                 // TODO: check if configured for pubkey
                 rejections.push_back({currentMsg->msgType, unsupported});
+                break;
             default:
-                // Invalid message; should have never gotten this far
+                // Unknown message type; reject
+                rejections.push_back({currentMsg->msgType, unsupported});
                 break;
             }
 

@@ -86,7 +86,12 @@ namespace nrpd
         failureCount = 0;
         lastaccessTime = 0;
         retryTime = 0;
-        flags = 0xFFFF;
+        ipv6 = true;
+        probationary = true;
+        ip4Peers = true;
+        ip6Peers = true;
+        pubKey = true;
+        shuttingdown = false;
     }
 
 
@@ -100,7 +105,7 @@ namespace nrpd
         m_enableClient = true;
         m_clientRequestIntervalSeconds = CLIENT_MIN_RETRY_SECONDS;
         m_clientReceiveTimeout = CLIENT_RESPONSE_TIMEOUT_SECONDS;
-        m_defaultEntropyResponse = DEFAULT_ENTROPY_SIZE;
+        m_defaultEntropySize = DEFAULT_ENTROPY_SIZE;
         // Bad servers are banned for 24hrs
         m_bannedServers = make_shared<ClientMRUCache>(60*60*24);
         m_activeIterator = m_activeServers.end();
@@ -123,9 +128,9 @@ namespace nrpd
         return m_port;
     }
 
-    int NrpdConfig::defaultEntropyResponse()
+    int NrpdConfig::defaultEntropySize()
     {
-        return m_defaultEntropyResponse;
+        return m_defaultEntropySize;
     }
 
     bool NrpdConfig::enableServer()

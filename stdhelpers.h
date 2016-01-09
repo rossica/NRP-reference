@@ -8,7 +8,7 @@
 namespace std
 {
     // Note: this only compares AF_FAMILY and address fields.
-    inline bool operator==(const sockaddr_storage& lhs, const sockaddr_storage& rhs)
+    inline constexpr bool operator==(const sockaddr_storage& lhs, const sockaddr_storage& rhs)
     {
         // Compare address families
         if(lhs.ss_family != rhs.ss_family)
@@ -34,7 +34,7 @@ namespace std
         return false;
     }
 
-    inline bool operator!=(const sockaddr_storage& lhs, const sockaddr_storage& rhs)
+    inline constexpr bool operator!=(const sockaddr_storage& lhs, const sockaddr_storage& rhs)
     {
         return !(operator==(lhs, rhs));
     }
@@ -69,14 +69,4 @@ namespace std
         }
     };
 
-    // Create a specialization of equal_to that supports sockaddr_storage
-    // Note: this only compares AF_FAMILY and address fields.
-    template<>
-    struct equal_to<sockaddr_storage>
-    {
-        bool operator()( const sockaddr_storage& lhs, const sockaddr_storage& rhs ) const
-        {
-            return operator==(lhs, rhs);
-        }
-    };
 }

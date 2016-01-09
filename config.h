@@ -27,19 +27,18 @@ namespace nrpd
         int failureCount;
         time_t lastaccessTime;
         int retryTime; // how many seconds since lastaccessTime to wait
-        union
+
+        struct
         {
-            struct
-            {
-                unsigned short ipv6 : 1; // is server address ipv4 or ipv6?
-                unsigned short probationary : 1; // is server proven good?
-                unsigned short ip4Peers : 1; // does server support ipv4 peers?
-                unsigned short ip6Peers : 1; // does server support ipv6 peers?
-                unsigned short pubKey : 1; // does server support public key?
-                unsigned short reserved : 11; // reserved for future flags.
-            };
-            unsigned short flags; // Only used to set/clear all flags at once.
+            unsigned short ipv6 : 1; // is server address ipv4 or ipv6?
+            unsigned short probationary : 1; // is server proven good?
+            unsigned short ip4Peers : 1; // does server support ipv4 peers?
+            unsigned short ip6Peers : 1; // does server support ipv6 peers?
+            unsigned short pubKey : 1; // does server support public key?
+            unsigned short shuttingdown : 1; // Server sent shutdown message.
+            unsigned short reserved : 10; // reserved for future flags.
         };
+
 
         // Initializes the ServerRecord with all flags true, and all other
         // fields set to zeroes.
@@ -59,7 +58,7 @@ namespace nrpd
         NrpdConfig(string*);
 
         unsigned short port();
-        int defaultEntropyResponse();
+        int defaultEntropySize();
         bool enableServer();
         bool enableClient();
         bool enablePeersResponse(nrpd_msg_type type);
@@ -118,7 +117,7 @@ namespace nrpd
 
         int m_clientRequestIntervalSeconds;
         int m_clientReceiveTimeout;
-        int m_defaultEntropyResponse;
+        int m_defaultEntropySize;
 
 
     };

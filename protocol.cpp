@@ -53,13 +53,22 @@ namespace nrpd
             return false;
         }
 
-        // Validate message type is appropriate for type of packet
-        if(hdr->msgType >= nrpd_msg_type::nrpd_msg_type_max ||
-           hdr->msgType < (
+        // Validate message type is appropriate for type of packet.
+        if(hdr->msgType < (
                    (isRequest) ? nrpd_msg_type::request_msg_min
                                 : nrpd_msg_type::response_msg_min))
         {
             return false;
+        }
+
+        if(hdr->msgType >= nrpd_msg_type::nrpd_msg_type_max)
+        {
+            if(!isRequest)
+            {
+                return false;
+            }
+            // Servers are more permissive than clients, since servers may receive
+            // requests from newer clients.
         }
 
         // Validate size and count agree
@@ -71,7 +80,8 @@ namespace nrpd
             {
                 return false;
             }
-            else if(!ValidateMessageSize(hdr, sizeof(Nrp_Message_Reject)))
+            else if(!ValidateMessageSize(hdr, sizeof(Nrp_Message_Reject))
+                    || !ValidateRejectMessage(hdr))
             {
                 return false;
             }
@@ -112,8 +122,13 @@ namespace nrpd
         case nrpd_msg_type::pubkey:
         case nrpd_msg_type::secureentropy:
         default:
-            // Not a valid type, fail.
-            return false;
+            // Servers are more permissive than clients, since servers may receive
+            // requests from newer clients.
+            if(!isRequest)
+            {
+                // Not a valid type, fail.
+                return false;
+            }
         }
 
         return true;
@@ -231,10 +246,10 @@ namespace nrpd
             idx < hdr->countOrSize;
             ++idx, ++msg)
         {
-
             // Validate rejection is for a valid message type
             if (msg->msgType >= nrpd_msg_type::nrpd_msg_type_max ||
                 msg->msgType < nrpd_msg_type::request_msg_min ||
+                // Not allowed to reject entropy
                 msg->msgType == nrpd_msg_type::entropy)
             {
                 return false;

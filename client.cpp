@@ -4,6 +4,7 @@
 #include <memory>
 #include <chrono>
 #include <ratio>
+#include <cmath>
 
 #include <fcntl.h>
 #include <stdlib.h>
@@ -22,9 +23,11 @@ namespace nrpd
     {
     }
 
+
     NrpdClient::NrpdClient(shared_ptr<NrpdConfig> conf) : m_config(conf), m_state(notinitialized)
     {
     }
+
 
     NrpdClient::~NrpdClient()
     {
@@ -40,6 +43,7 @@ namespace nrpd
             close(m_randomfd);
         }
     }
+
 
     int NrpdClient::InitializeClient()
     {
@@ -83,27 +87,45 @@ namespace nrpd
         return 0;
     }
 
+
+    // Construct a request packet in buffer, using server to determine
+    // which message types are supported.
+    //
     // Client determines the order of preference for responses, by requesting
-    // messages in the order of preference. Ordering matters because it
-    // attempts to ensure important messages fit in the single response packet
+    // messages in the order of preference. Ordering matters because the server
+    // attempts to ensure important messages fit in a single response packet
     // while less important messages are ignored.
     // The recommended order is:
     //
     // (pubkey/secureentropy) > entropy > (ip4peers,ip6peers)
     //
-    // Reject messages will always be first, if the server sends any. (clients
-    // cannot request reject messages, hence their omission from the above)
+    // Reject messages will always be first in response packets, if the server
+    // sends any. (clients cannot request reject messages, hence their omission
+    // from the above list of precedence)
     //
     // If the server rejects any of the message types, they are removed from
     // the order of preference, and wont be requested in subsequent requests
     // made to that server. Entropy messages cannot be rejected; ever server
     // must support that message at a minimum.
-    bool NrpdClient::ConstructRequest(ServerRecord const& server, int bufSize, unsigned char* buffer)
+    bool NrpdClient::ConstructRequest(ServerRecord const& server, unsigned int bufSize, unsigned char* buffer, int& outPktSize)
     {
         int msgCount = 0;
         int msgSize = sizeof(Nrp_Header_Request);
         pNrp_Header_Request pkt = (pNrp_Header_Request) buffer;
         pNrp_Header_Message msg = pkt->messages;
+
+        // Calculate maximum request message for this server
+        int serverMsgSupportCount = 2; // For the packet and entropy headers
+        serverMsgSupportCount += ((server.pubKey) ? 1 : 0);
+        serverMsgSupportCount += ((server.ip4Peers) ? 1 : 0);
+        serverMsgSupportCount += ((server.ip6Peers) ? 1 : 0);
+        // Check size of the buffer is large enough to hold the request
+        if(bufSize < (sizeof(Nrp_Header_Message) * serverMsgSupportCount))
+        {
+            // TODO: log here
+            return false;
+        }
+
 
         // 1. request public key info or secure entropy from the server
         // (if public key info is already obtained)
@@ -118,7 +140,7 @@ namespace nrpd
         }
 
         // 2. Request entropy from the server
-        msg = GenerateRequestEntropyMessage(DEFAULT_ENTROPY_SIZE, msg);
+        msg = GenerateRequestEntropyMessage(m_config->defaultEntropySize(), msg);
         msgCount++;
         msgSize += sizeof(Nrp_Header_Message);
 
@@ -142,20 +164,31 @@ namespace nrpd
 
         msg = GeneratePacketHeader(msgSize, request, msgCount, pkt);
 
-        return (msg != nullptr);
+        if(msg != nullptr)
+        {
+            outPktSize = msgSize;
+            return true;
+        }
+        else
+        {
+            // TODO: log here
+            return false;
+        }
     }
 
-    bool NrpdClient::ParseEntropyMessage(pNrp_Header_Message msg)
+
+    bool NrpdClient::ConsumeEntropy(size_t bufSize, unsigned char* entropy)
     {
-        if(msg == nullptr || msg->msgType != entropy)
+        // Allocated on the stack so it gets overwritten naturally
+        array<unsigned char, 512> scratch;
+        array<unsigned char, 64> secret;
+        int count = 0;
+        bool success = true;
+
+        if(entropy == nullptr || bufSize > scratch.size())
         {
             return false;
         }
-
-        array<unsigned char, 256> scratch;
-        array<unsigned char, 32> secret;
-        int count = 0;
-        bool success = true;
 
         // Don't trust the entropy from a server completely, so only accept
         // part of the input.
@@ -171,15 +204,13 @@ namespace nrpd
         // reading as many bits as there are bytes of entropy in the response
         // from the random device. A 1 will allow us to keep that byte, and a 0
         // will be zeroed out.
-        // There will always need to be at least 1 byte for less than 8 bytes
-        // of entropy.
 
-        int bits = (msg->countOrSize / 8) + 1;
+        int bytes = std::ceil(bufSize / 8.0f);
 
         // Copy received entropy into a scratch buffer where it is modified
-        memcpy(scratch.data(), msg->content, msg->countOrSize);
+        memcpy(scratch.data(), entropy, bufSize);
 
-        if( (count = read(m_randomfd, secret.data(), bits)) < 0)
+        if( (count = read(m_randomfd, secret.data(), bytes)) <= 0)
         {
             // Error reading from random device.
             // TODO: log error
@@ -191,14 +222,14 @@ namespace nrpd
         else
         {
             // Actually do the work of zeroing out parts of the entropy
-            for(int idx = 0; idx < msg->countOrSize; idx++)
+            for(unsigned int idx = 0; idx < bufSize; idx++)
             {
                 scratch[idx] *= ((secret[idx / 8] >> (idx % 8)) & 0x1);
             }
         }
 
         // write entropy to random device.
-        if( (count = write(m_randomfd, scratch.data(), msg->countOrSize)) <= 0)
+        if( (count = write(m_randomfd, scratch.data(), bufSize)) <= 0)
         {
             // Error writing entropy
             // TODO: log error
@@ -212,6 +243,7 @@ namespace nrpd
 
         return success;
     }
+
 
     bool NrpdClient::ParseRejectMessage(ServerRecord& server, pNrp_Header_Message msg)
     {
@@ -233,7 +265,7 @@ namespace nrpd
                     server.retryTime = server.retryTime * 1.25;
                     break;
                 case shuttingdown:
-                    // TODO: mark the server as shutting down?
+                    server.shuttingdown = true;
                     break;
                 case unsupported:
                     switch(rej->msgType)
@@ -250,12 +282,14 @@ namespace nrpd
                         default:
                             // server rejected an unknown message type as unsupported
                             // this shouldn't happen.
+                            // (how can a client request a message type it
+                            //  doesn't even recognize?)
                             // TODO: log here
                             break;
                     }
                     break;
                 default:
-                    // TODO: log here. Server rejected an unknown message type
+                    // TODO: log here. Server used an unrecognized rejection
                     // This is weird.
                     break;
             }
@@ -267,17 +301,20 @@ namespace nrpd
         return true;
     }
 
+
     bool NrpdClient::ParseResponse(ServerRecord& server, int bufSize, unsigned char* buffer)
     {
         pNrp_Header_Message msg = ((pNrp_Header_Packet) buffer)->messages;
         int msgCount = 0;
 
-        while(msg < EndOfPacket((pNrp_Header_Packet) buffer) && msgCount < ((pNrp_Header_Packet) buffer)->msgCount)
+        while((unsigned char*) msg < (buffer + bufSize)
+              && msg < EndOfPacket((pNrp_Header_Packet) buffer)
+              && msgCount < ((pNrp_Header_Packet) buffer)->msgCount)
         {
             switch(msg->msgType)
             {
             case entropy:
-                if(!ParseEntropyMessage(msg))
+                if(!ConsumeEntropy(msg->countOrSize, msg->content))
                 {
                     // TODO: log here
                 }
@@ -321,13 +358,15 @@ namespace nrpd
         return false;
     }
 
+
     int NrpdClient::ClientLoop()
     {
         m_state = running;
         ssize_t count = 0;
-        unique_ptr<unsigned char[]> buffer = make_unique<unsigned char[]>(MAX_RESPONSE_MESSAGE_SIZE);
+        unique_ptr<array<unsigned char, MAX_RESPONSE_MESSAGE_SIZE>> buffer = make_unique<array<unsigned char,MAX_RESPONSE_MESSAGE_SIZE>>();
         sockaddr_storage sendServerAddr;
-        pNrp_Header_Packet pkt = nullptr;
+        pNrp_Header_Packet pkt = (pNrp_Header_Packet) buffer->data();
+        int requestSize;
 
         while(m_state == running)
         {
@@ -343,7 +382,7 @@ namespace nrpd
             }
 
             // Build request based on configuration and known rejections from server (if any)
-            if(!ConstructRequest(server, MAX_RESPONSE_MESSAGE_SIZE, buffer.get()))
+            if(!ConstructRequest(server, buffer->size(), buffer->data(), requestSize))
             {
                 // TODO: log error
                 continue;
@@ -379,7 +418,7 @@ namespace nrpd
             auto first = chrono::high_resolution_clock::now();
 
             // send request packet to server
-            if( (count = send(m_socketfd, buffer.get(), MAX_REQUEST_MESSAGE_SIZE, 0)) < 0)
+            if( (count = send(m_socketfd, buffer->data(), requestSize, 0)) < 0)
             {
                 // If packet exceeds MTU, reset MTU and continue
                 // TODO: log error
@@ -387,7 +426,7 @@ namespace nrpd
             }
 
             // receive response
-            if( (count = recv(m_socketfd, buffer.get(), MAX_RESPONSE_MESSAGE_SIZE, 0)) < 0)
+            if( (count = recv(m_socketfd, buffer->data(), buffer->size(), 0)) < 0)
             {
                 // If an error occurred listening for a response
                 if(errno == EAGAIN || errno == EWOULDBLOCK)
@@ -407,8 +446,6 @@ namespace nrpd
             auto second = chrono::high_resolution_clock::now();
 
             // Validate received packet
-            pkt = (pNrp_Header_Packet) buffer.get();
-
             if(!ValidateResponsePacket(pkt))
             {
                 // TODO: log error
@@ -421,13 +458,17 @@ namespace nrpd
             // based on received messages e.g.
             //   write received entropy to system RNG.
             //   add peers to config
-            ParseResponse(server, MAX_RESPONSE_MESSAGE_SIZE, buffer.get());
+            if(!ParseResponse(server, buffer->size(), buffer->data()))
+            {
+                // TODO log here
+                continue;
+            }
 
             // Mark the server as successful
             m_config->MarkServerSuccessful(server);
 
             // If the implementation-defined high-resolution clock offers
-            // nanosecond resolution or better, we can use the timing delays
+            // microsecond resolution or better, we can use the timing delays
             // between when this code sends a packet and when it is actually
             // sent on the wire, and the delays between when a packet arrives
             // and when this code actually receives the data, to scrape up a
@@ -436,13 +477,14 @@ namespace nrpd
             // We need microsecond or better resolution for this to measure
             // the tiny processing delays that provide a few bits of entropy.
             // If the resolution is too low, then this will only measure the
-            // network latency, which is something the attack can know.
+            // network latency, which is something the attacker can know.
             //
             // This is highly recommended, if a high-enough resolution clock
-            // is available in the implementation. If not, this may be
-            // omitted.
-            if(chrono::high_resolution_clock::period::num <= std::micro::num
-               && chrono::high_resolution_clock::period::den >= std::micro::den)
+            // is available in the implementation.
+            // Since this is implemented as a compile-time compare between
+            // static ratio types, any decently smart optimizer will optimize
+            // away this code if it doesn't meet the bar.
+            if(std::ratio_less_equal<chrono::high_resolution_clock::period, std::micro>::value)
             {
                 auto firstDuration = first.time_since_epoch();
                 auto secondDuration = second.time_since_epoch();
