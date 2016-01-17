@@ -209,7 +209,7 @@ namespace nrpd
             // to calculate this every call will be a burden.
             for(auto& rec : m_activeServers)
             {
-                if(rec.second.ipv6 == ipv6)
+                if(rec.ipv6 == ipv6)
                 {
                     count +=1;
                 }
@@ -291,18 +291,18 @@ namespace nrpd
             // the same servers every time.
             for(auto& rec : m_activeServers)
             {
-                if(rec.second.ipv6 == ipv6)
+                if(rec.ipv6 == ipv6)
                 {
                     if(ipv6)
                     {
-                        memcpy(ip6Msg->ip, rec.second.host6, sizeof(ip6Msg->ip));
-                        ip6Msg->port = rec.second.port;
+                        memcpy(ip6Msg->ip, rec.host6, sizeof(ip6Msg->ip));
+                        ip6Msg->port = rec.port;
                         ip6Msg++;
                     }
                     else
                     {
-                        memcpy(ip4Msg->ip, rec.second.host4, sizeof(ip4Msg->ip));
-                        ip4Msg->port = rec.second.port;
+                        memcpy(ip4Msg->ip, rec.host4, sizeof(ip4Msg->ip));
+                        ip4Msg->port = rec.port;
                         ip4Msg++;
                     }
                     itr++;
@@ -353,7 +353,9 @@ namespace nrpd
             if(m_activeIterator != m_activeServers.end())
             {
                 m_prevReturnedProbationary = !m_prevReturnedProbationary;
-                return (*m_activeIterator).second;
+                // Note: casting away the 'const' here, because the contract
+                // with the caller is that they wont change the IP address
+                return (ServerRecord&) *m_activeIterator;
             }
             else if(m_probationaryIterator != m_probationaryServers.end())
             {
@@ -384,7 +386,9 @@ namespace nrpd
             {
                 // There are no probationary servers, so just return one
                 // from the active list.
-                return (*m_activeIterator).second;
+                // Note: casting away the 'const' here, because the contract
+                // with the caller is that they wont change the IP address
+                return (ServerRecord&) *m_activeIterator;
             }
             else
             {
@@ -460,7 +464,7 @@ namespace nrpd
             else // remove from active list
             {
                 // Make sure the iterator matches before removal by iterator
-                if(serv == (*m_activeIterator).second)
+                if(serv == *m_activeIterator)
                 {
                     lock_guard<mutex> lock(m_activeMutex);
 
@@ -505,7 +509,7 @@ namespace nrpd
             {
                 lock_guard<mutex> lock(m_activeMutex);
                 // Add to the active server list under lock
-                auto res = m_activeServers.emplace(serv, serv);
+                auto res = m_activeServers.emplace(serv);
 
                 // If a new element was added successfully
                 if(res.second == true)

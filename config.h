@@ -1,7 +1,7 @@
 #include <string>
 #include <netinet/in.h>
 #include <list>
-#include <map>
+#include <set>
 #include <memory>
 #include <mutex>
 #include <atomic>
@@ -99,9 +99,9 @@ namespace nrpd
         bool m_enableClient;
         shared_ptr<ClientMRUCache> m_bannedServers;
         list<ServerRecord> m_configuredServers;
-        map<ServerRecord, ServerRecord> m_activeServers;
+        set<ServerRecord> m_activeServers;
         list<ServerRecord> m_probationaryServers;
-        map<ServerRecord, ServerRecord>::iterator m_activeIterator;
+        set<ServerRecord>::iterator m_activeIterator;
         list<ServerRecord>::iterator m_probationaryIterator;
         atomic<int> m_countIp6Servers;
         atomic<int> m_countIp4Servers;

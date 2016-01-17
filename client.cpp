@@ -415,7 +415,7 @@ namespace nrpd
                 }
             }
 
-            auto first = chrono::high_resolution_clock::now();
+            auto firstTimePoint = chrono::high_resolution_clock::now();
 
             // send request packet to server
             if( (count = send(m_socketfd, buffer->data(), requestSize, 0)) < 0)
@@ -443,7 +443,7 @@ namespace nrpd
                 continue;
             }
 
-            auto second = chrono::high_resolution_clock::now();
+            auto secondTimePoint = chrono::high_resolution_clock::now();
 
             // Validate received packet
             if(!ValidateResponsePacket(pkt))
@@ -486,8 +486,8 @@ namespace nrpd
             // away this code if it doesn't meet the bar.
             if(std::ratio_less_equal<chrono::high_resolution_clock::period, std::micro>::value)
             {
-                auto firstDuration = first.time_since_epoch();
-                auto secondDuration = second.time_since_epoch();
+                auto firstDuration = firstTimePoint.time_since_epoch();
+                auto secondDuration = secondTimePoint.time_since_epoch();
 
                 auto begin = firstDuration.count();
                 auto end = secondDuration.count();

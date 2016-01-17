@@ -72,6 +72,7 @@ void GenerateConfigFakeActiveServers(shared_ptr<NrpdConfig>& config, int ip4Coun
     std::mt19937 mt(time(nullptr));
     std::uniform_int_distribution<unsigned char> dis(0, 255); // IP byte
     std::uniform_int_distribution<unsigned short> dis2(0,65535); // port number
+    ServerRecord tempRec;
 
     int end = max(ip4Count, ip6Count);
 
@@ -79,12 +80,14 @@ void GenerateConfigFakeActiveServers(shared_ptr<NrpdConfig>& config, int ip4Coun
     {
         if(i < ip4Count)
         {
-            config->m_activeServers.push_back({{{dis(mt), dis(mt), dis(mt), dis(mt)}}, false, dis2(mt), 0, 0L});
+            tempRec = {{{dis(mt), dis(mt), dis(mt), dis(mt)}}, dis2(mt), 0, 0L, 0, {false, false, true, true, true, true}};
+            config->m_activeServers.emplace(tempRec);
         }
 
         if(i < ip6Count)
         {
-            config->m_activeServers.push_back({{{dis(mt), dis(mt), dis(mt), dis(mt), dis(mt), dis(mt), dis(mt), dis(mt), dis(mt), dis(mt), dis(mt), dis(mt), dis(mt), dis(mt), dis(mt), dis(mt)}}, true, dis2(mt), 0, 0L});
+            tempRec = {{{dis(mt), dis(mt), dis(mt), dis(mt), dis(mt), dis(mt), dis(mt), dis(mt), dis(mt), dis(mt), dis(mt), dis(mt), dis(mt), dis(mt), dis(mt), dis(mt)}}, dis2(mt), 0, 0L, 0, {true, false, true, true, true, true}};
+            config->m_activeServers.emplace(tempRec);
         }
     }
 }
@@ -803,6 +806,7 @@ bool TestConfigGetServerList()
     std::list<TestCaseGetServerList> cases;
     pNrp_Message_Ip4Peer ip4Msg;
     pNrp_Message_Ip6Peer ip6Msg;
+    ServerRecord tempRec;
     int count;
 
     /// Negative test cases
@@ -814,8 +818,10 @@ bool TestConfigGetServerList()
 
     /// ip4 test cases
     tempConfig = make_shared<NrpdConfig>();
-    tempConfig->m_activeServers.push_back({{1,2,3,4}, false, 1234, 0, 0});
-    tempConfig->m_activeServers.push_back({{5,6,7,8}, false, 5678, 0, 0});
+    tempRec = {{1,2,3,4}, 1234, 0, 0, 0, {false, false, true, true, true, true}};
+    tempConfig->m_activeServers.emplace(tempRec);
+    tempRec = {{5,6,7,8}, 5678, 0, 0, 0, {false, false, true, true, true, true}};
+    tempConfig->m_activeServers.emplace(tempRec);
 
     cases.push_back({tempConfig, ip4peers, 1, 0 ,false, sizeof(Nrp_Message_Ip4Peer)});
     cases.push_back({tempConfig, ip4peers, 2, 0, false, 2 * sizeof(Nrp_Message_Ip4Peer)});
@@ -823,8 +829,10 @@ bool TestConfigGetServerList()
 
     /// ip6 test cases
     tempConfig = make_shared<NrpdConfig>();
-    tempConfig->m_activeServers.push_back({{0,1,2,3,4,5,6,7,8,9,0xa,0xb,0xc,0xd,0xe,0xf}, true, 4321, 0, 0});
-    tempConfig->m_activeServers.push_back({{0xf,0xe,0xd,0xc,0xb,0xa,9,8,7,6,5,4,3,2,1,0}, true, 1234, 0, 0});
+    tempRec = {{0,1,2,3,4,5,6,7,8,9,0xa,0xb,0xc,0xd,0xe,0xf}, 4321, 0, 0, 0, {true, false, true, true, true, true}};
+    tempConfig->m_activeServers.emplace(tempRec);
+    tempRec = {{0xf,0xe,0xd,0xc,0xb,0xa,9,8,7,6,5,4,3,2,1,0}, 1234, 0, 0, 0, {true, false, true, true, true, true}};
+    tempConfig->m_activeServers.emplace(tempRec);
 
     cases.push_back({tempConfig, ip6peers, 1, 0, false, sizeof(Nrp_Message_Ip6Peer)});
     cases.push_back({tempConfig, ip6peers, 2, 0, false, 2 * sizeof(Nrp_Message_Ip6Peer)});
@@ -832,10 +840,14 @@ bool TestConfigGetServerList()
 
     /// Mixed test cases
     tempConfig = make_shared<NrpdConfig>();
-    tempConfig->m_activeServers.push_back({{1,2,3,4}, false, 1234, 0, 0});
-    tempConfig->m_activeServers.push_back({{0,1,2,3,4,5,6,7,8,9,0xa,0xb,0xc,0xd,0xe,0xf}, true, 4321, 0, 0});
-    tempConfig->m_activeServers.push_back({{5,6,7,8}, false, 5678, 0, 0});
-    tempConfig->m_activeServers.push_back({{0xf,0xe,0xd,0xc,0xb,0xa,9,8,7,6,5,4,3,2,1,0}, true, 1234, 0, 0});
+    tempRec = {{1,2,3,4}, 1234, 0, 0, 0, {false, false, true, true, true, true}};
+    tempConfig->m_activeServers.emplace(tempRec);
+    tempRec = {{0,1,2,3,4,5,6,7,8,9,0xa,0xb,0xc,0xd,0xe,0xf}, 4321, 0, 0, 0, {true, false, true, true, true, true}};
+    tempConfig->m_activeServers.emplace(tempRec);
+    tempRec = {{5,6,7,8}, 5678, 0, 0, 0, {false, false, true, true, true, true}};
+    tempConfig->m_activeServers.emplace(tempRec);
+    tempRec = {{0xf,0xe,0xd,0xc,0xb,0xa,9,8,7,6,5,4,3,2,1,0}, 1234, 0, 0, 0, {true, false, true, true, true, true}};
+    tempConfig->m_activeServers.emplace(tempRec);
 
     cases.push_back({tempConfig, ip4peers, 1, 0 ,false, sizeof(Nrp_Message_Ip4Peer)});
     cases.push_back({tempConfig, ip4peers, 2, 0, false, 2 * sizeof(Nrp_Message_Ip4Peer)});
@@ -947,6 +959,7 @@ bool TestConfigActiveServerCount()
 {
     shared_ptr<NrpdConfig> tempConfig;
     std::list<TestCaseActiveServerCount> cases;
+    ServerRecord tempRec;
     int count;
 
     /// Test with empty active server list
@@ -957,9 +970,12 @@ bool TestConfigActiveServerCount()
 
     /// Test with some fake servers
     tempConfig = make_shared<NrpdConfig>();
-    tempConfig->m_activeServers.push_back({{1,2,3,4}, false, 1234, 0, 0});
-    tempConfig->m_activeServers.push_back({{0,1,2,3,4,5,6,7,8,9,0xa,0xb,0xc,0xd,0xe,0xf}, true, 4321, 0, 0});
-    tempConfig->m_activeServers.push_back({{5,6,7,8}, false, 1234, 0, 0});
+    tempRec = {{1,2,3,4}, 1234, 0, 0, 0, {false, false, true, true, true, true}};
+    tempConfig->m_activeServers.emplace(tempRec);
+    tempRec = {{0,1,2,3,4,5,6,7,8,9,0xa,0xb,0xc,0xd,0xe,0xf}, 4321, 0, 0, 0, {true, false, true, true, true, true}};
+    tempConfig->m_activeServers.emplace(tempRec);
+    tempRec = {{5,6,7,8}, 1234, 0, 0, 0, {false, false, true, true, true, true}};
+    tempConfig->m_activeServers.emplace(tempRec);
 
     cases.push_back({tempConfig, ip4peers, 2});
     cases.push_back({tempConfig, ip6peers, 1});
