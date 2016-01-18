@@ -13,7 +13,7 @@ int main(int argc, char* argv[])
     result = TestConfigGetServerList();
     result = TestServerGeneratePeersResponse();
     result = TestServerGenerateEntropyResponse();
-    result = TestClientMruCache();
+    result = TestMruCacheSockaddrStorage();
     result = TestOperatorEqualsSockaddrStorage();
     result = TestHashSockaddrStorage();
     result = TestHashServerRecord();

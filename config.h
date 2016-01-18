@@ -7,7 +7,7 @@
 #include <atomic>
 
 #include "protocol.h"
-#include "clientmrucache.h"
+#include "mrucache.h"
 
 #pragma once
 
@@ -136,7 +136,7 @@ namespace nrpd
         unsigned short m_port;
         bool m_enableServer;
         bool m_enableClient;
-        shared_ptr<ClientMRUCache<ServerRecord>> m_bannedServers;
+        shared_ptr<MruCache<ServerRecord>> m_bannedServers;
         list<ServerRecord> m_configuredServers;
         set<ServerRecord> m_activeServers;
         list<ServerRecord> m_probationaryServers;

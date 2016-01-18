@@ -24,8 +24,8 @@ bool TestConfigActiveServerCount();
 // A test to validate config generation of a flat server list
 bool TestConfigGetServerList();
 
-// A test to validate the functionality of ClientMRUCache
-bool TestClientMruCache();
+// A test to validate the functionality of MruCache
+bool TestMruCacheSockaddrStorage();
 
 // Tests the custom operator==() for sockaddr_storage
 bool TestOperatorEqualsSockaddrStorage();

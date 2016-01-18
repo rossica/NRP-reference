@@ -107,7 +107,7 @@ namespace nrpd
         m_clientReceiveTimeout = CLIENT_RESPONSE_TIMEOUT_SECONDS;
         m_defaultEntropySize = DEFAULT_ENTROPY_SIZE;
         // Bad servers are banned for 24hrs
-        m_bannedServers = make_shared<ClientMRUCache<ServerRecord>>(60*60*24);
+        m_bannedServers = make_shared<MruCache<ServerRecord>>(60*60*24);
         m_activeIterator = m_activeServers.end();
         m_probationaryIterator = m_probationaryServers.end();
         m_prevReturnedProbationary = true;

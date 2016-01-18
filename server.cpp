@@ -81,7 +81,7 @@ namespace nrpd
         }
 
         // Create recent clients hashmap
-        m_recentClients = make_shared<ClientMRUCache<sockaddr_storage>>(CLIENT_MIN_RETRY_SECONDS);
+        m_recentClients = make_shared<MruCache<sockaddr_storage>>(CLIENT_MIN_RETRY_SECONDS);
 
         m_state = initialized;
         return EXIT_SUCCESS;

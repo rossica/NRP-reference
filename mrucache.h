@@ -16,10 +16,10 @@ using namespace std;
 namespace nrpd
 {
     template<typename Key>
-    class ClientMRUCache : public std::enable_shared_from_this<ClientMRUCache<Key>>
+    class MruCache : public std::enable_shared_from_this<MruCache<Key>>
     {
     public:
-        ClientMRUCache(int lifetimeSeconds)
+        MruCache(int lifetimeSeconds)
             : m_lifetimeSeconds(lifetimeSeconds),
             m_cleanIntervalSeconds(lifetimeSeconds),
             m_lastCleanTime(s_clock.now())
@@ -27,7 +27,7 @@ namespace nrpd
         }
 
         // Thread procedure to run the Clean member function on an instance
-        static void CleanerThread(shared_ptr<ClientMRUCache<Key>> target)
+        static void CleanerThread(shared_ptr<MruCache<Key>> target)
         {
             if(!target->Clean())
             {
@@ -167,7 +167,7 @@ namespace nrpd
             {
                 // Note: we use shared_from_this() in order to keep the object alive
                 // until this thread exits.
-                thread cleaningThread(ClientMRUCache<Key>::CleanerThread, this->shared_from_this());
+                thread cleaningThread(MruCache<Key>::CleanerThread, this->shared_from_this());
 
                 // Let the cleaner do its job and continue executing
                 cleaningThread.detach();

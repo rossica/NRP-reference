@@ -16,7 +16,7 @@
 
 #include "../server.h"
 #include "../config.h"
-#include "../clientmrucache.h"
+#include "../mrucache.h"
 #include "../stdhelpers.h"
 
 #undef private
@@ -1028,7 +1028,7 @@ bool TestConfigMarkServerSuccessful()
     return false;
 }
 
-bool TestClientMruCache()
+bool TestMruCacheSockaddrStorage()
 {
     auto init6 = std::initializer_list<unsigned char>({0,1,2,3,4,5,6,7,8,9,0xa,0xb,0xc,0xd,0xe,0xf});
     sockaddr_storage stor4, stor6;
@@ -1037,7 +1037,7 @@ bool TestClientMruCache()
     unsigned char* array4 = (unsigned char*) &(in4.sin_addr.s_addr);
 
     // 1. Create a cache with timeout of 2 seconds.
-    shared_ptr<ClientMRUCache<sockaddr_storage>> cache = make_shared<ClientMRUCache<sockaddr_storage>>(1);
+    shared_ptr<MruCache<sockaddr_storage>> cache = make_shared<MruCache<sockaddr_storage>>(1);
 
     in4.sin_family = AF_INET;
     std::copy((init6.begin()+1), (init6.end()-11), array4);
@@ -1051,21 +1051,21 @@ bool TestClientMruCache()
     // 3. Check if it IsPresent()
     if(!cache->IsPresent(stor4))
     {
-        cout << "ClientMRUCache::IsPresent returned false. Expected true.3" << endl;
+        cout << "MruCache::IsPresent returned false. Expected true.3" << endl;
         return false;
     }
 
     // 4. Try IsPresentAdd()ing the same thing
     if(!cache->IsPresentAdd(stor4))
     {
-        cout << "ClientMRUCache::IsPresentAdd returned false. Expected true.4" << endl;
+        cout << "MruCache::IsPresentAdd returned false. Expected true.4" << endl;
         return false;
     }
 
     // 5. Try IsPresentAdd()ing something new
     if(cache->IsPresentAdd(stor6))
     {
-        cout << "ClientMRUCache::IsPresentAdd returned true. Expected false.5";
+        cout << "MruCache::IsPresentAdd returned true. Expected false.5";
         return false;
     }
 
@@ -1075,13 +1075,13 @@ bool TestClientMruCache()
     // 7. Check if either thing IsPresent()
     if(!cache->IsPresent(stor4))
     {
-        cout << "ClientMRUCache::IsPresent returned false. Expected true.7a" << endl;
+        cout << "MruCache::IsPresent returned false. Expected true.7a" << endl;
         return false;
     }
 
     if(!cache->IsPresent(stor6))
     {
-        cout << "ClientMRUCache::IsPresent returned false. Expected true.7b" << endl;
+        cout << "MruCache::IsPresent returned false. Expected true.7b" << endl;
         return false;
     }
 
@@ -1091,14 +1091,14 @@ bool TestClientMruCache()
     // 9. Check that neither thing IsPresent()
     if(cache->IsPresent(stor6))
     {
-        cout << "ClientMRUCache::IsPresent returned true. Expected false.9a" << endl;
+        cout << "MruCache::IsPresent returned true. Expected false.9a" << endl;
         return false;
     }
 
     std::this_thread::sleep_for(100ms);
     if(cache->IsPresent(stor4))
     {
-        cout << "ClientMRUCache::IsPresent return true. Expected false.9b" << endl;
+        cout << "MruCache::IsPresent return true. Expected false.9b" << endl;
         return false;
     }
 
@@ -1108,7 +1108,7 @@ bool TestClientMruCache()
 
         if(cache->m_recentClients.size() != 0)
         {
-            cout << "ClientMRUCache cleaner thread didn't clean up! " <<  cache->m_recentClients.size() << " items remain." << endl;
+            cout << "MruCache cleaner thread didn't clean up! " <<  cache->m_recentClients.size() << " items remain." << endl;
             for(auto& item : cache->m_recentClients)
             {
                 cout << "    Item age " << chrono::duration_cast<chrono::seconds>(cache->s_clock.now() - item.second).count() << " seconds." << endl;
@@ -1118,7 +1118,7 @@ bool TestClientMruCache()
         }
     }
 
-    cout << "ClientMRUCache passed all tests!" << endl << endl;
+    cout << "MruCache<sockaddr_storage> passed all tests!" << endl << endl;
 
     return true;
 }
