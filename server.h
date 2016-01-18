@@ -28,7 +28,7 @@ namespace nrpd
             stopping,
             destroying
         };
-        shared_ptr<ClientMRUCache> m_recentClients;
+        shared_ptr<ClientMRUCache<sockaddr_storage>> m_recentClients;
         shared_ptr<NrpdConfig> m_config;
         NrpdServerState m_state;
         int m_socketfd;

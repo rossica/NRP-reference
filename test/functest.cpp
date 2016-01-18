@@ -1037,7 +1037,7 @@ bool TestClientMruCache()
     unsigned char* array4 = (unsigned char*) &(in4.sin_addr.s_addr);
 
     // 1. Create a cache with timeout of 2 seconds.
-    shared_ptr<ClientMRUCache> cache = make_shared<ClientMRUCache>(1);
+    shared_ptr<ClientMRUCache<sockaddr_storage>> cache = make_shared<ClientMRUCache<sockaddr_storage>>(1);
 
     in4.sin_family = AF_INET;
     std::copy((init6.begin()+1), (init6.end()-11), array4);
@@ -1310,4 +1310,79 @@ bool TestHashSockaddrStorage()
     return true;
 }
 
+bool TestHashServerRecord()
+{
+    auto init = std::initializer_list<unsigned char>({0,1,2,3,4,5,6,7,8,9,0xa,0xb,0xc,0xd,0xe,0xf});
+    ServerRecord a, b;
+
+    // hashing v4 address is non-zero
+    copy((init.begin()+1), (init.end()-11), a.host4);
+    a.ipv6 = false;
+
+    if(hash<ServerRecord>()(a) == 0)
+    {
+        cout << "Hash of v4 address was 0." << endl;
+        return false;
+    }
+
+    // hashing v6 address is non-zero
+    copy(init.begin(), init.end(), b.host6);
+    b.ipv6 = true;
+
+    if(hash<ServerRecord>()(b) == 0)
+    {
+        cout << "Hash of v6 address was 0." << endl;
+        return false;
+    }
+
+    // hashing same v4 address is equal
+    copy((init.begin()+1), (init.end()-11), b.host4);
+    b.ipv6 = false;
+
+    if(hash<ServerRecord>()(a) != hash<ServerRecord>()(b))
+    {
+        cout << "Hash of identical v4 address was unequal." << endl;
+        return false;
+    }
+
+    // hashing same v6 address is equal
+    a.ipv6 = true;
+    b.ipv6 = true;
+    copy(init.begin(), init.end(), a.host6);
+    copy(init.begin(), init.end(), b.host6);
+
+    if(hash<ServerRecord>()(a) != hash<ServerRecord>()(b))
+    {
+        cout << "Hash of identical v6 address was unequal." << endl;
+        return false;
+    }
+
+    // hashing different v4 address is different
+    copy((init.begin()+1), (init.end()-11), a.host4);
+    copy(rbegin(init), (rend(init)-12), b.host4);
+    a.ipv6 = false;
+    b.ipv6 = false;
+
+    if(hash<ServerRecord>()(a) == hash<ServerRecord>()(b))
+    {
+        cout << "Hashes of different v4 addresses were equal." << endl;
+        return false;
+    }
+
+    // hashing different v6 address is different
+    copy(init.begin(), init.end(), a.host6);
+    copy(rbegin(init), rend(init), b.host6);
+    a.ipv6 = true;
+    b.ipv6  = true;
+
+    if(hash<ServerRecord>()(a) == hash<ServerRecord>()(b))
+    {
+        cout << "Hashes of different v6 addresses were equal." << endl;
+        return false;
+    }
+
+    cout << "hash<ServerRecord>() passed all tests!" << endl << endl;
+
+    return true;
+}
 

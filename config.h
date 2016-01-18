@@ -11,7 +11,7 @@
 
 #pragma once
 
-using namespace std;
+
 
 namespace nrpd
 {
@@ -50,6 +50,45 @@ namespace nrpd
         // Defines ip4 servers as less-than ip6 servers
         constexpr bool operator<(ServerRecord const& rhs) const;
     };
+}
+
+// Note: this should be in stdhelper.h, but it would introduce a circular-
+// dependency between stdhelper.h and config.h, so instead it's defined here.
+namespace std
+{
+    template<>
+    struct hash<nrpd::ServerRecord>
+    {
+        typedef nrpd::ServerRecord argument_type;
+        typedef std::size_t result_type;
+        result_type operator()(argument_type const& s) const
+        {
+            result_type result = 0ull;
+            // Only hashes the address, no other fields
+            if(s.ipv6)
+            {
+                for(unsigned int i = 0; i < sizeof(s.host6); i++)
+                {
+                    result = result ^ (std::hash<unsigned char>()(s.host6[i]) << i);
+                }
+            }
+            else
+            {
+                for(unsigned int i = 0; i < sizeof(s.host4); i++)
+                {
+                    result = result ^ (std::hash<unsigned char>()(s.host4[i]) << i);
+                }
+            }
+
+            return result;
+        }
+    };
+}
+
+using namespace std;
+
+namespace nrpd
+{
 
     class NrpdConfig
     {
@@ -97,7 +136,7 @@ namespace nrpd
         unsigned short m_port;
         bool m_enableServer;
         bool m_enableClient;
-        shared_ptr<ClientMRUCache> m_bannedServers;
+        shared_ptr<ClientMRUCache<ServerRecord>> m_bannedServers;
         list<ServerRecord> m_configuredServers;
         set<ServerRecord> m_activeServers;
         list<ServerRecord> m_probationaryServers;

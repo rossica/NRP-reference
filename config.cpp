@@ -107,7 +107,7 @@ namespace nrpd
         m_clientReceiveTimeout = CLIENT_RESPONSE_TIMEOUT_SECONDS;
         m_defaultEntropySize = DEFAULT_ENTROPY_SIZE;
         // Bad servers are banned for 24hrs
-        m_bannedServers = make_shared<ClientMRUCache>(60*60*24);
+        m_bannedServers = make_shared<ClientMRUCache<ServerRecord>>(60*60*24);
         m_activeIterator = m_activeServers.end();
         m_probationaryIterator = m_probationaryServers.end();
         m_prevReturnedProbationary = true;
@@ -411,23 +411,8 @@ namespace nrpd
         // Server has failed too many times, remove it
         if(serv.failureCount + 1 >= CLIENT_MAX_SERVER_TIMEOUT_COUNT)
         {
-            // Add server to banned list by copying IP address to temp sockaddr_storage
-            sockaddr_storage stor;
-            sockaddr_in& ip4Addr = (sockaddr_in&) stor;
-            sockaddr_in6& ip6Addr = (sockaddr_in6&) stor;
-
-            if(serv.ipv6)
-            {
-                stor.ss_family = AF_INET6;
-                memcpy(&(ip6Addr.sin6_addr), serv.host6, sizeof(ip6Addr.sin6_addr));
-            }
-            else
-            {
-                stor.ss_family = AF_INET;
-                memcpy(&(ip4Addr.sin_addr), serv.host4, sizeof(ip4Addr.sin_addr));
-            }
-
-            m_bannedServers->Add(stor);
+            // Add server to banned list
+            m_bannedServers->Add(serv);
 
             // remove from probationary list
             if(serv.probationary)
@@ -551,7 +536,6 @@ namespace nrpd
 
     bool NrpdConfig::AddServersFromMessage(pNrp_Header_Message msg)
     {
-        sockaddr_storage stor;
         ServerRecord rec;
 
         if(msg == nullptr)
@@ -568,26 +552,21 @@ namespace nrpd
         {
             pNrp_Message_Ip4Peer ip4Msg = (pNrp_Message_Ip4Peer) msg->content;
 
-            sockaddr_in& v4addr = (sockaddr_in&) stor;
-            stor.ss_family = AF_INET;
 
             for(int i = 0; i < msg->countOrSize; i++, ip4Msg++)
             {
-                // Copy IP into sockaddr struct to test whether it is banned
-                memcpy(&(v4addr.sin_addr), ip4Msg->ip, sizeof(v4addr.sin_addr));
-
-                if(m_bannedServers->IsPresent(stor))
-                {
-                    // Server is banned, don't add to the list
-                    continue;
-                }
-
                 // Create ServerRecord to test if the server already exists
                 rec.Initialize();
                 rec.ipv6 = false;
                 memcpy(rec.host4, ip4Msg->ip, sizeof(rec.host4));
                 rec.port = ip4Msg->port;
                 rec.retryTime = m_clientRequestIntervalSeconds;
+
+                if(m_bannedServers->IsPresent(rec))
+                {
+                    // Server is banned, don't add to the list
+                    continue;
+                }
 
                 if(m_activeServers.find(rec) != m_activeServers.end())
                 {
@@ -604,20 +583,8 @@ namespace nrpd
         {
             pNrp_Message_Ip6Peer ip6Msg = (pNrp_Message_Ip6Peer) msg->content;
 
-            sockaddr_in6& v6addr = (sockaddr_in6&) stor;
-            stor.ss_family = AF_INET6;
-
             for(int i = 0; i < msg->countOrSize; i++, ip6Msg++)
             {
-                // Copy IP address into sockaddr to test whether it is banned
-                memcpy(&(v6addr.sin6_addr), ip6Msg->ip, sizeof(v6addr.sin6_addr));
-
-                if(m_bannedServers->IsPresent(stor))
-                {
-                    // Server is banned. Continue with the next one.
-                    continue;
-                }
-
                 // Create ServerRecord to test if this server was already
                 // added to the client.
                 rec.Initialize();
@@ -625,6 +592,12 @@ namespace nrpd
                 memcpy(rec.host6, ip6Msg->ip, sizeof(rec.host6));
                 rec.port = ip6Msg->port;
                 rec.retryTime = m_clientRequestIntervalSeconds;
+
+                if(m_bannedServers->IsPresent(rec))
+                {
+                    // Server is banned. Continue with the next one.
+                    continue;
+                }
 
                 if(m_activeServers.find(rec) != m_activeServers.end())
                 {

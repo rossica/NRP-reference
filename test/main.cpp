@@ -16,6 +16,7 @@ int main(int argc, char* argv[])
     result = TestClientMruCache();
     result = TestOperatorEqualsSockaddrStorage();
     result = TestHashSockaddrStorage();
+    result = TestHashServerRecord();
 
 
     if(!result)

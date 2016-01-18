@@ -32,3 +32,6 @@ bool TestOperatorEqualsSockaddrStorage();
 
 // Tests the std::hash() specialization for sockaddr_storage
 bool TestHashSockaddrStorage();
+
+// Tests the std::hash() specialization for ServerRecord
+bool TestHashServerRecord();
