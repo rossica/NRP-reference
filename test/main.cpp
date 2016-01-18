@@ -13,6 +13,10 @@ int main(int argc, char* argv[])
     result = TestConfigGetServerList();
     result = TestServerGeneratePeersResponse();
     result = TestServerGenerateEntropyResponse();
+    result = TestClientMruCache();
+    result = TestOperatorEqualsSockaddrStorage();
+    result = TestHashSockaddrStorage();
+
 
     if(!result)
     {

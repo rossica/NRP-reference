@@ -34,16 +34,19 @@ namespace nrpd
             bool IsPresentAdd(sockaddr_storage& addr);
 
             // Check whether address is present without adding it
+            // Returns true if it exists and hasn't expired.
+            // Returns false if it doesn't exist, or does exist and has expired
             bool IsPresent(sockaddr_storage& addr);
 
             // Add address to the container
             void Add(sockaddr_storage& addr);
         private:
             mutex m_mutex;
-            unordered_map<sockaddr_storage, time_t> m_recentClients;
-            int m_lifetimeSeconds; // entry lifetime
-            int m_cleanIntervalSeconds; // time between cleanings
-            int m_lastCleanTime; // time of last cleaning
+            static chrono::steady_clock s_clock;
+            unordered_map<sockaddr_storage, chrono::time_point<chrono::steady_clock>> m_recentClients;
+            chrono::seconds m_lifetimeSeconds; // entry lifetime
+            chrono::seconds m_cleanIntervalSeconds; // time between cleanings
+            chrono::time_point<chrono::steady_clock> m_lastCleanTime; // time of last cleaning
 
             // Schedules a cleaning if it's been at least m_cleanIntervalSeconds
             // since m_lastCleanTime.

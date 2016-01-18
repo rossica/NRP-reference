@@ -6,14 +6,19 @@
 #include <random>
 #include <time.h>
 #include <math.h>
+#include <thread>
 
 #include "../protocol.h"
 
 // This is a hack-y way to accomplish this, but I don't philosophically agree
 // with the alternatives.
 #define private public
+
 #include "../server.h"
 #include "../config.h"
+#include "../clientmrucache.h"
+#include "../stdhelpers.h"
+
 #undef private
 
 
@@ -65,6 +70,14 @@ struct TestCaseGenEntropyResponse
     int responseSize;
     bool expectedNullptr;
     int expectedResponseSize;
+};
+
+struct TestCaseOperatorEqualsSockadderStorage
+{
+    shared_ptr<sockaddr_storage> a;
+    shared_ptr<sockaddr_storage> b;
+    bool expected;
+    string desc;
 };
 
 void GenerateConfigFakeActiveServers(shared_ptr<NrpdConfig>& config, int ip4Count, int ip6Count)
@@ -666,7 +679,7 @@ bool TestServerGeneratePeersResponse()
     msgCount = 2 + (rand() % (MAX_BYTE - 2)); // guarantee at least 2 messages
     type = (((rand() % 2) == 0) ? ip4peers : ip6peers); // randomly select type
     temp = ((type == ip4peers) ? sizeof(Nrp_Message_Ip4Peer) : sizeof(Nrp_Message_Ip6Peer));
-    expectedResponseSize = sizeof(Nrp_Header_Message) + ((1 + (rand() % msgCount - 1)) * temp);
+    expectedResponseSize = sizeof(Nrp_Header_Message) + ((2 + (rand() % msgCount - 1)) * temp);
     availableBytes = expectedResponseSize + (rand() % temp);
     cases.push_back({tempServer, type, msgCount, availableBytes, 0, false, expectedResponseSize});
 
@@ -994,3 +1007,307 @@ bool TestConfigActiveServerCount()
     cout << "NrpdConfig::ActiveServerCount passed all tests!" << endl << endl;
     return true;
 }
+
+bool TestConfigAddServersFromMessage()
+{
+    return false;
+}
+
+bool TestConfigGetNextServer()
+{
+    return false;
+}
+
+bool TestConfigIncrementServerFailCount()
+{
+    return false;
+}
+
+bool TestConfigMarkServerSuccessful()
+{
+    return false;
+}
+
+bool TestClientMruCache()
+{
+    auto init6 = std::initializer_list<unsigned char>({0,1,2,3,4,5,6,7,8,9,0xa,0xb,0xc,0xd,0xe,0xf});
+    sockaddr_storage stor4, stor6;
+    sockaddr_in& in4 = (sockaddr_in&) stor4;
+    sockaddr_in6& in6 = (sockaddr_in6&) stor6;
+    unsigned char* array4 = (unsigned char*) &(in4.sin_addr.s_addr);
+
+    // 1. Create a cache with timeout of 2 seconds.
+    shared_ptr<ClientMRUCache> cache = make_shared<ClientMRUCache>(1);
+
+    in4.sin_family = AF_INET;
+    std::copy((init6.begin()+1), (init6.end()-11), array4);
+
+    in6.sin6_family = AF_INET6;
+    std::copy(init6.begin(), init6.end(), in6.sin6_addr.__in6_u.__u6_addr8);
+
+    // 2. Add() something
+    cache->Add(stor4);
+
+    // 3. Check if it IsPresent()
+    if(!cache->IsPresent(stor4))
+    {
+        cout << "ClientMRUCache::IsPresent returned false. Expected true.3" << endl;
+        return false;
+    }
+
+    // 4. Try IsPresentAdd()ing the same thing
+    if(!cache->IsPresentAdd(stor4))
+    {
+        cout << "ClientMRUCache::IsPresentAdd returned false. Expected true.4" << endl;
+        return false;
+    }
+
+    // 5. Try IsPresentAdd()ing something new
+    if(cache->IsPresentAdd(stor6))
+    {
+        cout << "ClientMRUCache::IsPresentAdd returned true. Expected false.5";
+        return false;
+    }
+
+    // 6. Sleep for half a second
+    std::this_thread::sleep_for(500ms);
+
+    // 7. Check if either thing IsPresent()
+    if(!cache->IsPresent(stor4))
+    {
+        cout << "ClientMRUCache::IsPresent returned false. Expected true.7a" << endl;
+        return false;
+    }
+
+    if(!cache->IsPresent(stor6))
+    {
+        cout << "ClientMRUCache::IsPresent returned false. Expected true.7b" << endl;
+        return false;
+    }
+
+    // 8. Sleep for another second to let them expire.
+    std::this_thread::sleep_for(600ms);
+
+    // 9. Check that neither thing IsPresent()
+    if(cache->IsPresent(stor6))
+    {
+        cout << "ClientMRUCache::IsPresent returned true. Expected false.9a" << endl;
+        return false;
+    }
+
+    std::this_thread::sleep_for(100ms);
+    if(cache->IsPresent(stor4))
+    {
+        cout << "ClientMRUCache::IsPresent return true. Expected false.9b" << endl;
+        return false;
+    }
+
+    // 10. Grab the mutex to wait until the cleaner finishes before the final test
+    {
+        lock_guard<mutex> lock(cache->m_mutex);
+
+        if(cache->m_recentClients.size() != 0)
+        {
+            cout << "ClientMRUCache cleaner thread didn't clean up! " <<  cache->m_recentClients.size() << " items remain." << endl;
+            for(auto& item : cache->m_recentClients)
+            {
+                cout << "    Item age " << chrono::duration_cast<chrono::seconds>(cache->s_clock.now() - item.second).count() << " seconds." << endl;
+            }
+
+            return false;
+        }
+    }
+
+    cout << "ClientMRUCache passed all tests!" << endl << endl;
+
+    return true;
+}
+
+bool TestOperatorEqualsSockaddrStorage()
+{
+    auto init = std::initializer_list<unsigned char>({0,1,2,3,4,5,6,7,8,9,0xa,0xb,0xc,0xd,0xe,0xf});
+    list<TestCaseOperatorEqualsSockadderStorage> cases;
+
+    shared_ptr<sockaddr_storage> a = make_shared<sockaddr_storage>();
+    shared_ptr<sockaddr_storage> b = make_shared<sockaddr_storage>();
+    sockaddr_in* a4, *b4;
+    sockaddr_in6* a6, *b6;
+
+
+    // 1. same instance
+    a4 = (sockaddr_in*) a.get();
+    a4->sin_family = AF_INET;
+    std::copy((init.begin()+1), (init.end()-11), (unsigned char*) &(a4->sin_addr.s_addr));
+
+    cases.push_back({a,a,true,"Same struct"});
+
+    // 2. different address families
+    b6 = (sockaddr_in6*) b.get();
+    b6->sin6_family = AF_INET6;
+    std::copy(init.begin(), init.end(), (unsigned char*) &(b6->sin6_addr.__in6_u.__u6_addr8));
+
+    cases.push_back({a,b,false,"Different Address families"});
+
+    // 3. v4 family, different address
+    b = make_shared<sockaddr_storage>();
+    b4 = (sockaddr_in*) b.get();
+    b4->sin_family = AF_INET;
+    std::copy((init.begin()+5), (init.end()-7), (unsigned char*) &(b4->sin_addr.s_addr));
+
+    cases.push_back({a,b,false,"IPv4 Different addresses"});
+
+    // 4. v4 family, same address
+    b = make_shared<sockaddr_storage>();
+    b4 = (sockaddr_in*) b.get();
+    b4->sin_family = AF_INET;
+    b4->sin_addr.s_addr = a4->sin_addr.s_addr;
+
+    cases.push_back({a,b,true,"IPv4 Same address"});
+
+    // 5. v6 family, different address
+    a = make_shared<sockaddr_storage>();
+    b = make_shared<sockaddr_storage>();
+    a6 = (sockaddr_in6*) a.get();
+    b6 = (sockaddr_in6*) b.get();
+
+    a6->sin6_family = AF_INET6;
+    b6->sin6_family = AF_INET6;
+
+    std::copy(init.begin(), init.end(), (unsigned char*) &(a6->sin6_addr.__in6_u.__u6_addr8));
+    std::copy(rbegin(init), rend(init), (unsigned char*) &(b6->sin6_addr.__in6_u.__u6_addr8));
+
+    cases.push_back({a,b,false,"IPv6 Different addresses"});
+
+    // 6. v6 family, same address
+    b = make_shared<sockaddr_storage>();
+    b6 = (sockaddr_in6*) b.get();
+    b6->sin6_family = AF_INET6;
+
+    std::copy(init.begin(), init.end(), (unsigned char*) &(b6->sin6_addr.__in6_u.__u6_addr8));
+
+    cases.push_back({a,b,true,"IPv6 Same address"});
+
+    // 7. null references
+    cases.push_back({nullptr, b, false, "lhs is null"});
+    cases.push_back({a, nullptr, false, "rhs is null"});
+    cases.push_back({nullptr, nullptr, false, "Both operands null"});
+
+    // 8. non v4/v6 family
+    a = make_shared<sockaddr_storage>();
+    b = make_shared<sockaddr_storage>();
+
+    a->ss_family = AF_IPX;
+    b->ss_family = AF_IPX;
+
+    cases.push_back({a,b,false,"Non-IP family"});
+
+    // run tests
+
+    for(auto& test : cases)
+    {
+        bool result = (*(test.a) == *(test.b));
+        if(result != test.expected)
+        {
+            cout << "Test " << test.desc << " returned " << result <<". Expected " << test.expected << "." << endl;
+            return false;
+        }
+    }
+
+    cout << "operator==(sockaddr_storage, sockaddr_storage) passed all tests!" << endl << endl;
+
+    return true;
+}
+
+bool TestHashSockaddrStorage()
+{
+    auto init = std::initializer_list<unsigned char>({0,1,2,3,4,5,6,7,8,9,0xa,0xb,0xc,0xd,0xe,0xf});
+    sockaddr_storage a, b;
+
+    sockaddr_in& a4 = (sockaddr_in&) a;
+    sockaddr_in6& a6 = (sockaddr_in6&) a;
+
+    sockaddr_in& b4 = (sockaddr_in&) b;
+    sockaddr_in6& b6 = (sockaddr_in6&) b;
+
+
+    // hashing v4 address is non-zero
+    copy((init.begin()+1), (init.end()-11), (unsigned char*)&a4.sin_addr.s_addr);
+    a.ss_family = AF_INET;
+
+    if(hash<sockaddr_storage>()(a) == 0)
+    {
+        cout << "Hash of v4 address was 0." << endl;
+        return false;
+    }
+
+    // hashing v6 address is non-zero
+    copy(init.begin(), init.end(), (unsigned char*)&b6.sin6_addr.__in6_u.__u6_addr8);
+    b.ss_family = AF_INET6;
+
+    if(hash<sockaddr_storage>()(b) == 0)
+    {
+        cout << "Hash of v6 address was 0." << endl;
+        return false;
+    }
+
+    // hashing same v4 address is equal
+    copy((init.begin()+1), (init.end()-11), (unsigned char*)&b4.sin_addr.s_addr);
+    b.ss_family = AF_INET;
+
+    if(hash<sockaddr_storage>()(a) != hash<sockaddr_storage>()(b))
+    {
+        cout << "Hash of identical v4 address was unequal." << endl;
+        return false;
+    }
+
+    // hashing same v6 address is equal
+    a.ss_family = AF_INET6;
+    b.ss_family = AF_INET6;
+    copy(init.begin(), init.end(), (unsigned char*)&a6.sin6_addr.__in6_u.__u6_addr8);
+    copy(init.begin(), init.end(), (unsigned char*)&b6.sin6_addr.__in6_u.__u6_addr8);
+
+    if(hash<sockaddr_storage>()(a) != hash<sockaddr_storage>()(b))
+    {
+        cout << "Hash of identical v6 address was unequal." << endl;
+        return false;
+    }
+
+    // hashing different v4 address is different
+    copy((init.begin()+1), (init.end()-11), (unsigned char*)&a4.sin_addr.s_addr);
+    copy(rbegin(init), (rend(init)-12), (unsigned char*)&b4.sin_addr.s_addr);
+    a.ss_family = AF_INET;
+    b.ss_family = AF_INET;
+
+    if(hash<sockaddr_storage>()(a) == hash<sockaddr_storage>()(b))
+    {
+        cout << "Hashes of different v4 addresses were equal." << endl;
+        return false;
+    }
+
+    // hashing different v6 address is different
+    copy(init.begin(), init.end(), (unsigned char*)&a6.sin6_addr.__in6_u.__u6_addr8);
+    copy(rbegin(init), rend(init), (unsigned char*)&b6.sin6_addr.__in6_u.__u6_addr8);
+    a.ss_family = AF_INET6;
+    b.ss_family = AF_INET6;
+
+    if(hash<sockaddr_storage>()(a) == hash<sockaddr_storage>()(b))
+    {
+        cout << "Hashes of different v6 addresses were equal." << endl;
+        return false;
+    }
+
+
+    // hashing non-IP is 0
+    a.ss_family = AF_IPX;
+    if(hash<sockaddr_storage>()(a) != 0)
+    {
+        cout << "Hash of non-IP sockaddr was non-zero." << endl;
+        return false;
+    }
+
+    cout << "hash<sockaddr_storage>() passed all tests!" << endl << endl;
+
+    return true;
+}
+
+

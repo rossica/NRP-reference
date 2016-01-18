@@ -23,3 +23,12 @@ bool TestConfigActiveServerCount();
 
 // A test to validate config generation of a flat server list
 bool TestConfigGetServerList();
+
+// A test to validate the functionality of ClientMRUCache
+bool TestClientMruCache();
+
+// Tests the custom operator==() for sockaddr_storage
+bool TestOperatorEqualsSockaddrStorage();
+
+// Tests the std::hash() specialization for sockaddr_storage
+bool TestHashSockaddrStorage();

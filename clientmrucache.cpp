@@ -6,7 +6,7 @@ namespace nrpd
     ClientMRUCache::ClientMRUCache(int lifetimeSeconds)
         : m_lifetimeSeconds(lifetimeSeconds),
           m_cleanIntervalSeconds(lifetimeSeconds),
-          m_lastCleanTime(time(nullptr))
+          m_lastCleanTime(s_clock.now())
     {
     }
 
@@ -25,19 +25,27 @@ namespace nrpd
         {
             // Hold the lock for the duration of the iterator
             lock_guard<mutex> lock(m_mutex);
+            int count = 0;
 
-            for(auto& item : m_recentClients)
+            auto item = m_recentClients.begin();
+
+            while(item != m_recentClients.end())
             {
-                if(time(nullptr) > item.second + m_lifetimeSeconds)
+                if(s_clock.now() > ((*item).second + m_lifetimeSeconds))
                 {
-                    m_recentClients.erase(item.first);
+                    count++;
+                    item = m_recentClients.erase(item);
+                }
+                else
+                {
+                    item = next(item);
                 }
             }
         } // End of lock scope
 
         // TODO: Compute better heuristic for cleaning frequency
 
-        m_lastCleanTime = time(nullptr);
+        m_lastCleanTime = s_clock.now();
 
         return true;
     }
@@ -45,7 +53,7 @@ namespace nrpd
     void ClientMRUCache::ScheduleCleaning()
     {
         // Schedule cleaning if it's been long enough since the previous one
-        if(time(nullptr) >= m_lastCleanTime + m_cleanIntervalSeconds)
+        if(s_clock.now() >= (m_lastCleanTime + m_cleanIntervalSeconds))
         {
             // Note: we use shared_from_this() in order to keep the object alive
             // until this thread exits.
@@ -65,18 +73,17 @@ namespace nrpd
             lock_guard<mutex> lock(m_mutex);
 
             // attempt to insert address
-            pair<unordered_map<sockaddr_storage, time_t>::iterator, bool> const&
-                result = m_recentClients.emplace(addr, time(nullptr));
+            auto const& result = m_recentClients.emplace(addr, s_clock.now());
 
             // Failed to insert because it is already inserted
             if(!result.second)
             {
                 // check whether client is expired or not
-                if(time(nullptr) >= result.second + m_lifetimeSeconds)
+                if(s_clock.now() >= (result.first->second + m_lifetimeSeconds))
                 {
                     // Expired: return false, update time
                     response = false;
-                    result.first->second = time(nullptr);
+                    result.first->second = s_clock.now();
                 }
                 else
                 {
@@ -100,8 +107,30 @@ namespace nrpd
 
     bool ClientMRUCache::IsPresent(sockaddr_storage& addr)
     {
-        lock_guard<mutex> lock(m_mutex);
-        return (m_recentClients.find(addr) != m_recentClients.end());
+        bool found = false;
+        {
+            lock_guard<mutex> lock(m_mutex);
+
+            auto iter = m_recentClients.find(addr);
+
+            if(iter != m_recentClients.end())
+            {
+                if(s_clock.now() >= ((*iter).second + m_lifetimeSeconds))
+                {
+                    // It's expired
+                    found = false;
+                }
+                else
+                {
+                    found = true;
+                }
+            }
+        } // End of lock scope
+
+        // Schedule cleaning if it's been long enough since previous cleaning
+        ScheduleCleaning();
+
+        return found;
     }
 
     void ClientMRUCache::Add(sockaddr_storage& addr)
@@ -109,7 +138,7 @@ namespace nrpd
         lock_guard<mutex> lock(m_mutex);
         // Don't check whether the insertion succeeded or not because it's not
         // important in this case.
-        m_recentClients.emplace(addr, time(nullptr));
+        m_recentClients.emplace(addr, s_clock.now());
 
     }
 }

@@ -10,6 +10,12 @@ namespace std
     // Note: this only compares AF_FAMILY and address fields.
     inline constexpr bool operator==(const sockaddr_storage& lhs, const sockaddr_storage& rhs)
     {
+        if(&lhs == nullptr || &rhs == nullptr)
+        {
+            // Don't crash if someone tricks the compiler.
+            return false;
+        }
+
         // Compare address families
         if(lhs.ss_family != rhs.ss_family)
         {
@@ -19,9 +25,9 @@ namespace std
         // Compare addresses
         if(lhs.ss_family == AF_INET)
         {
-            return (0 == memcmp(&(((sockaddr_in const&)lhs).sin_addr),
-                                &(((sockaddr_in const&)rhs).sin_addr),
-                                sizeof(((sockaddr_in const&)lhs).sin_addr)));
+            return (0 == memcmp(&(((const sockaddr_in &)lhs).sin_addr),
+                                &(((const sockaddr_in &)rhs).sin_addr),
+                                sizeof(((const sockaddr_in &)lhs).sin_addr)));
         }
         else if (lhs.ss_family == AF_INET6)
         {
