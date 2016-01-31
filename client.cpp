@@ -262,7 +262,7 @@ namespace nrpd
             {
                 case busy:
                     // Server is busy, increase time until next contact
-                    server.retryTime = server.retryTime * 1.25;
+                    server.retryTime *= 1.25;
                     break;
                 case shuttingdown:
                     server.shuttingdown = true;
@@ -375,7 +375,7 @@ namespace nrpd
 
             // Check that it's been enough time since the last request was made
             // to this server
-            if(time(nullptr) <= server.lastaccessTime + server.retryTime)
+            if(chrono::steady_clock::now() <= (server.lastaccessTime + server.retryTime))
             {
                 // continue to next server. Don't update this one
                 continue;

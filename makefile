@@ -1,6 +1,6 @@
 CC=g++
 DEBUG=-g
-CXXFLAGS=-std=c++14 -Wall -fms-extensions $(DEBUG)
+CXXFLAGS=-std=c++14 -Wall -fms-extensions -pipe $(DEBUG)
 LFLAGS=-Wall $(DEBUG) -lpthread
 
 

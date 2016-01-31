@@ -5,6 +5,8 @@
 #include <memory>
 #include <mutex>
 #include <atomic>
+#include <chrono>
+#include <initializer_list>
 
 #include "protocol.h"
 #include "mrucache.h"
@@ -18,6 +20,17 @@ namespace nrpd
     class ServerRecord
     {
         public:
+        ServerRecord() = default;
+
+        ServerRecord(const unsigned char* ip, bool isIPv6, unsigned short port);
+
+        // Convenience constructor, for testing.
+        ServerRecord(initializer_list<unsigned char> l, unsigned short port);
+
+        ServerRecord(pNrp_Message_Ip4Peer peer);
+
+        ServerRecord(pNrp_Message_Ip6Peer peer);
+
         union // In network byte order
         {
             unsigned char host6[16];
@@ -25,8 +38,8 @@ namespace nrpd
         };
         unsigned short port; // This is in network byte order
         int failureCount;
-        time_t lastaccessTime;
-        int retryTime; // how many seconds since lastaccessTime to wait
+        chrono::steady_clock::time_point lastaccessTime;
+        chrono::seconds retryTime; // how many seconds since lastaccessTime to wait
 
         struct
         {
@@ -40,15 +53,15 @@ namespace nrpd
         };
 
 
-        // Initializes the ServerRecord with all flags true, and all other
+        // Initializes the ServerRecord with all support enabled, and all other
         // fields set to zeroes.
         void Initialize();
 
         // Only compares ip addresses
-        constexpr bool operator==(ServerRecord const& rhs) const;
+        bool operator==(ServerRecord const& rhs) const;
 
         // Defines ip4 servers as less-than ip6 servers
-        constexpr bool operator<(ServerRecord const& rhs) const;
+        bool operator<(ServerRecord const& rhs) const;
     };
 }
 

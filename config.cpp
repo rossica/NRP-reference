@@ -10,7 +10,7 @@ namespace nrpd
 
 /// ServerRecord member functions ///
 
-    constexpr bool ServerRecord::operator==(ServerRecord const& rhs) const
+    bool ServerRecord::operator==(ServerRecord const& rhs) const
     {
         if(ipv6 != rhs.ipv6)
         {
@@ -39,7 +39,7 @@ namespace nrpd
         return true;
     }
 
-    constexpr bool ServerRecord::operator<(ServerRecord const& rhs) const
+    bool ServerRecord::operator<(ServerRecord const& rhs) const
     {
         if(ipv6 != rhs.ipv6)
         {
@@ -79,20 +79,69 @@ namespace nrpd
         }
     }
 
-    void ServerRecord::Initialize()
+    ServerRecord::ServerRecord(const unsigned char* ip, bool isIPv6, unsigned short port)
     {
-        memset(host6, 0, sizeof(host6));
-        port = 0;
+        if(isIPv6)
+        {
+            memcpy(host6, ip, sizeof(host6));
+        }
+        else
+        {
+            memcpy(host4, ip, sizeof(host4));
+        }
+
+        this->port = port;
+
         failureCount = 0;
-        lastaccessTime = 0;
-        retryTime = 0;
-        ipv6 = true;
+
+        retryTime = chrono::seconds(CLIENT_MIN_RETRY_SECONDS);
+
+        // initialize flags
+        ipv6 = isIPv6;
         probationary = true;
         ip4Peers = true;
         ip6Peers = true;
         pubKey = true;
         shuttingdown = false;
     }
+
+    ServerRecord::ServerRecord(initializer_list<unsigned char> l, unsigned short port)
+    {
+        if(l.size() >=16)
+        {
+            copy(l.begin(), (l.end()-(l.size()-16)), host6);
+            ipv6 = true;
+        }
+        else if(l.size() >= 4) // but is less than 16
+        {
+            copy(l.begin(), (l.end()-(l.size()-4)), host4);
+            ipv6 = false;
+        }
+
+        this->port = port;
+
+        failureCount = 0;
+
+        retryTime = chrono::seconds(CLIENT_MIN_RETRY_SECONDS);
+
+        // initialize flags
+        probationary = true;
+        ip4Peers = true;
+        ip6Peers = true;
+        pubKey = true;
+        shuttingdown = false;
+
+    }
+
+    ServerRecord::ServerRecord(pNrp_Message_Ip4Peer peer) : ServerRecord(peer->ip, false, peer->port)
+    {
+    }
+
+    ServerRecord::ServerRecord(pNrp_Message_Ip6Peer peer) : ServerRecord(peer->ip, true, peer->port)
+    {
+    }
+
+
 
 
 /// NrpdConfig member functions ///
@@ -330,6 +379,11 @@ namespace nrpd
         else
         {
             m_activeIterator = next(m_activeIterator);
+
+            if(m_activeIterator == m_activeServers.end())
+            {
+                m_activeIterator = m_activeServers.begin();
+            }
         }
 
         // (Re-)Initialize or increment iterator
@@ -340,6 +394,11 @@ namespace nrpd
         else
         {
             m_probationaryIterator = next(m_probationaryIterator);
+
+            if(m_probationaryIterator == m_probationaryServers.end())
+            {
+                m_probationaryIterator = m_probationaryServers.begin();
+            }
         }
 
         // Return a server from either the active server list or probationary
@@ -406,7 +465,7 @@ namespace nrpd
     void NrpdConfig::IncrementServerFailCount(ServerRecord& serv)
     {
         serv.failureCount += 1;
-        serv.lastaccessTime = time(nullptr);
+        serv.lastaccessTime = chrono::steady_clock::now();
 
         // Server has failed too many times, remove it
         if(serv.failureCount + 1 >= CLIENT_MAX_SERVER_TIMEOUT_COUNT)
@@ -484,7 +543,7 @@ namespace nrpd
     {
         // Reset the server failure count
         serv.failureCount = 0;
-        serv.lastaccessTime = time(nullptr);
+        serv.lastaccessTime = chrono::steady_clock::now();
 
         // If on the probationary server list, move to the active server list
         if(serv.probationary == true)
@@ -556,11 +615,8 @@ namespace nrpd
             for(int i = 0; i < msg->countOrSize; i++, ip4Msg++)
             {
                 // Create ServerRecord to test if the server already exists
-                rec.Initialize();
-                rec.ipv6 = false;
-                memcpy(rec.host4, ip4Msg->ip, sizeof(rec.host4));
-                rec.port = ip4Msg->port;
-                rec.retryTime = m_clientRequestIntervalSeconds;
+                rec = ServerRecord(ip4Msg);
+                rec.retryTime = chrono::seconds(m_clientRequestIntervalSeconds);
 
                 if(m_bannedServers->IsPresent(rec))
                 {
@@ -587,11 +643,8 @@ namespace nrpd
             {
                 // Create ServerRecord to test if this server was already
                 // added to the client.
-                rec.Initialize();
-                rec.ipv6 = true;
-                memcpy(rec.host6, ip6Msg->ip, sizeof(rec.host6));
-                rec.port = ip6Msg->port;
-                rec.retryTime = m_clientRequestIntervalSeconds;
+                rec = ServerRecord(ip6Msg);
+                rec.retryTime = chrono::seconds(m_clientRequestIntervalSeconds);
 
                 if(m_bannedServers->IsPresent(rec))
                 {
