@@ -50,6 +50,10 @@ namespace nrpd
         // must support that message at a minimum.
         bool ConstructRequest(ServerRecord const& server, unsigned int bufSize, unsigned char* buffer, int& outPktSize);
 
+        // Zero out part of the entropy, in place, so an eavesdropper
+        // doesn't know which entropy was consumed.
+        bool ScrambleEntropy(size_t bufSize, unsigned char* entropy);
+
         // Parse entropy response message and write obtained entropy to system
         // PRNG to increase system entropy
         bool ConsumeEntropy(size_t bufSize, unsigned char* entropy);

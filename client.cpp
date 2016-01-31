@@ -177,15 +177,13 @@ namespace nrpd
     }
 
 
-    bool NrpdClient::ConsumeEntropy(size_t bufSize, unsigned char* entropy)
+    bool NrpdClient::ScrambleEntropy(size_t bufSize, unsigned char* entropy)
     {
-        // Allocated on the stack so it gets overwritten naturally
-        array<unsigned char, 512> scratch;
         array<unsigned char, 64> secret;
         int count = 0;
         bool success = true;
 
-        if(entropy == nullptr || bufSize > scratch.size())
+        if(entropy == nullptr || bufSize > MAX_ENTROPY_SIZE)
         {
             return false;
         }
@@ -207,39 +205,48 @@ namespace nrpd
 
         int bytes = std::ceil(bufSize / 8.0f);
 
-        // Copy received entropy into a scratch buffer where it is modified
-        memcpy(scratch.data(), entropy, bufSize);
-
         if( (count = read(m_randomfd, secret.data(), bytes)) <= 0)
         {
             // Error reading from random device.
             // TODO: log error
 
-            // Proceed with consuming the entropy without modification;
-            // this should almost never occur, and if it does, it's not
-            // serious enough to block consumption of entropy.
+            success = false;
         }
         else
         {
             // Actually do the work of zeroing out parts of the entropy
             for(unsigned int idx = 0; idx < bufSize; idx++)
             {
-                scratch[idx] *= ((secret[idx / 8] >> (idx % 8)) & 0x1);
+                entropy[idx] *= ((secret[idx / 8] >> (idx % 8)) & 0x1);
             }
         }
 
+        // Clear secret memory
+        memset(secret.data(), 0, secret.size());
+
+        return success;
+    }
+
+
+    bool NrpdClient::ConsumeEntropy(size_t bufSize, unsigned char* entropy)
+    {
+        // Allocated on the stack so it gets overwritten naturally
+        int count = 0;
+        bool success = true;
+
+        if(entropy == nullptr || bufSize > MAX_ENTROPY_SIZE)
+        {
+            return false;
+        }
+
         // write entropy to random device.
-        if( (count = write(m_randomfd, scratch.data(), bufSize)) <= 0)
+        if( (count = write(m_randomfd, entropy, bufSize)) <= 0)
         {
             // Error writing entropy
             // TODO: log error
             // This is serious enough to signal failure
             success = false;
         }
-
-        // Clear scratch and secret memory
-        memset(scratch.data(), 0, scratch.size());
-        memset(secret.data(), 0, secret.size());
 
         return success;
     }
@@ -314,6 +321,13 @@ namespace nrpd
             switch(msg->msgType)
             {
             case entropy:
+                if(!ScrambleEntropy(msg->countOrSize, msg->content))
+                {
+                    // Proceed with consuming the entropy without modification;
+                    // this should almost never occur, and if it does, it's not
+                    // serious enough to block consumption of entropy.
+                    // TODO: log here
+                }
                 if(!ConsumeEntropy(msg->countOrSize, msg->content))
                 {
                     // TODO: log here
@@ -377,6 +391,9 @@ namespace nrpd
             // to this server
             if(chrono::steady_clock::now() <= (server.lastaccessTime + server.retryTime))
             {
+                // Wait a second before trying the next server; don't use
+                // this loop as a busy wait and eat CPU for no reason.
+                this_thread::sleep_for(1s);
                 // continue to next server. Don't update this one
                 continue;
             }
@@ -492,12 +509,26 @@ namespace nrpd
                 auto begin = firstDuration.count();
                 auto end = secondDuration.count();
 
-                auto timeEntropy = begin ^ end;
+                // N.B. Some implementations lie about the resolution of their
+                // clocks, and simply alias the system clock.
+                // Since we don't want to be fooled and write predictable
+                // entropy to the random device, make a check here before
+                // writing the data.
+                // If the clock provides microsecond or greater accuracy, then
+                // the difference modulo 10000 will provide the microsecond or
+                // smaller differences. If this is always 0, the implementation
+                // is lying. (it may be legitimately 0, and we accept the risk
+                // of occasionally discarding good data).
+                // If this value is non-zero, the implementation is good.
+                if((end - begin) % 10000)
+                {
+                    auto timeEntropy = begin ^ end;
 
-                // Write entropy to pool
-                write(m_randomfd, &timeEntropy, sizeof(timeEntropy));
+                    // Write entropy to pool
+                    write(m_randomfd, &timeEntropy, sizeof(timeEntropy));
 
-                timeEntropy = 0L;
+                    timeEntropy = 0L;
+                }
             }
         }
 
