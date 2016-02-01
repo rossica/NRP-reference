@@ -13,6 +13,7 @@ namespace nrpd
         ~NrpdClient();
         int ClientLoop();
         int InitializeClient();
+        static void ClientThread(shared_ptr<NrpdClient> client);
     private:
         enum NrpdClientState
         {
@@ -49,6 +50,9 @@ namespace nrpd
         // made to that server. Entropy messages cannot be rejected; ever server
         // must support that message at a minimum.
         bool ConstructRequest(ServerRecord const& server, unsigned int bufSize, unsigned char* buffer, int& outPktSize);
+
+        // Call Connect() on the address supplied by server.
+        bool ConnectServer(ServerRecord const& server);
 
         // Zero out part of the entropy, in place, so an eavesdropper
         // doesn't know which entropy was consumed.

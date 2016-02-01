@@ -118,7 +118,7 @@ namespace nrpd
             ipv6 = false;
         }
 
-        this->port = port;
+        this->port = htons(port);
 
         failureCount = 0;
 
@@ -164,6 +164,7 @@ namespace nrpd
         m_countIp4Servers = -1;
         m_clientEnableIp4 = true;
         m_clientEnableIp6 = true;
+        m_configuredServers = {ServerRecord({127,0,0,1}, 8080)};
     }
 
     NrpdConfig::NrpdConfig(string* path)

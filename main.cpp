@@ -16,6 +16,7 @@
 
 #include "server.h"
 #include "config.h"
+#include "client.h"
 
 using namespace std;
 using namespace nrpd;
@@ -26,6 +27,7 @@ int main(int argc, char* argv[])
     int retCode = 0;
     shared_ptr<NrpdConfig> config;
     shared_ptr<NrpdServer> server;
+    shared_ptr<NrpdClient> client;
 
     config = make_shared<NrpdConfig>();
 
@@ -35,42 +37,52 @@ int main(int argc, char* argv[])
     }
 
     server = make_shared<NrpdServer>(config);
+    client = make_shared<NrpdClient>(config);
 
-    // Fork in the background to daemonize
+
     // TODO: make this configurable
-    //pid = fork();
-    if(pid < 0)
+    if(false) // daemonize == true
     {
-        exit(EXIT_FAILURE);
+        // Fork in the background to daemonize
+        pid = fork();
+        if(pid < 0)
+        {
+            exit(EXIT_FAILURE);
+        }
+        if(pid > 0)
+        {
+            exit(EXIT_SUCCESS);
+        }
     }
-    if(pid > 0)
-    {
-        exit(EXIT_SUCCESS);
-    }
-
-    // Set filemask
-    umask(0);
 
     //TODO: start logging here
 
-    // create new session for child process
-    //sid = setsid();
-    if(sid < 0)
+    // TODO: make this configurable
+    if(false) // daemonize == true
     {
-        exit(EXIT_FAILURE);
+        // Set filemask
+        umask(0);
+
+
+
+        // create new session for child process
+        sid = setsid();
+        if(sid < 0)
+        {
+            exit(EXIT_FAILURE);
+        }
+
+        // TODO: chdir here
+        // if( chdir("/") < 0)
+        // {
+        //     exit(EXIT_FAILURE);
+        // }
+
+        // TODO: close standard file descriptors here
+        close(STDIN_FILENO);
+        close(STDOUT_FILENO);
+        close(STDERR_FILENO);
     }
-
-    // TODO: chdir here
-    // if( chdir("/") < 0)
-    // {
-    //     exit(EXIT_FAILURE);
-    // }
-
-    // TODO: close standard file descriptors here
-    // close(STDIN_FILENO);
-    // close(STDOUT_FILENO);
-    // close(STDERR_FILENO);
-
 
 
     // Specific configuration for nrpd server
@@ -79,9 +91,17 @@ int main(int argc, char* argv[])
         return EXIT_FAILURE;
     }
 
+    // Configuration and initialization for nrpd client
+    if((retCode = client->InitializeClient()) != EXIT_SUCCESS)
+    {
+        return EXIT_FAILURE;
+    }
+
 
     thread serverThread(NrpdServer::ServerThread, server);
+    thread clientThread(NrpdClient::ClientThread, client);
     serverThread.join();
+    clientThread.join();
     //retCode = server->ServerLoop();
     //printf("%d", retCode);
 

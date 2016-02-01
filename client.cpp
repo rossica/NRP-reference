@@ -1,6 +1,7 @@
 #include "client.h"
 #include "protocol.h"
 #include "stdhelpers.h"
+#include "log.h"
 #include <memory>
 #include <chrono>
 #include <ratio>
@@ -174,6 +175,45 @@ namespace nrpd
             // TODO: log here
             return false;
         }
+    }
+
+
+    bool NrpdClient::ConnectServer(ServerRecord const& server)
+    {
+        sockaddr_storage sendServerAddr;
+        bool result = true;
+        int error = 0;
+
+        if(server.ipv6)
+        {
+            sendServerAddr.ss_family = AF_INET6;
+            sockaddr_in6& servAddr6 = (sockaddr_in6&) sendServerAddr;
+            servAddr6.sin6_port = server.port;
+            memcpy(&(servAddr6.sin6_addr), server.host6, sizeof(servAddr6.sin6_addr));
+
+            if((error = connect(m_socketfd, (sockaddr*) &sendServerAddr, sizeof(sockaddr_in6))) < 0)
+            {
+                // TODO: log error
+                error = errno;
+                result = false;
+            }
+        }
+        else
+        {
+            sendServerAddr.ss_family = AF_INET;
+            sockaddr_in& servAddr4 = (sockaddr_in&) sendServerAddr;
+            servAddr4.sin_port = server.port;
+            memcpy(&(servAddr4.sin_addr), server.host4, sizeof(servAddr4.sin_addr));
+
+            if((error = connect(m_socketfd, (sockaddr*) &sendServerAddr, sizeof(sockaddr_in))) < 0)
+            {
+                // TODO: log error
+                error = errno;
+                result = false;
+            }
+        }
+
+        return result;
     }
 
 
@@ -369,21 +409,30 @@ namespace nrpd
             msg = NextMessage(msg);
         }
 
-        return false;
+        return true;
     }
 
 
     int NrpdClient::ClientLoop()
     {
         m_state = running;
-        ssize_t count = 0;
+        ssize_t count;
+        int error;
         unique_ptr<array<unsigned char, MAX_RESPONSE_MESSAGE_SIZE>> buffer = make_unique<array<unsigned char,MAX_RESPONSE_MESSAGE_SIZE>>();
-        sockaddr_storage sendServerAddr;
         pNrp_Header_Packet pkt = (pNrp_Header_Packet) buffer->data();
         int requestSize;
 
         while(m_state == running)
         {
+            // Reset variables
+            error = 0;
+            count = 0;
+            requestSize = 0;
+
+            // Wait a second before trying the next server; don't use
+            // this loop as a busy wait and eat CPU for no reason.
+            this_thread::sleep_for(1s);
+
             // Request next server from config
             ServerRecord& server = m_config->GetNextServer();
 
@@ -391,9 +440,6 @@ namespace nrpd
             // to this server
             if(chrono::steady_clock::now() <= (server.lastaccessTime + server.retryTime))
             {
-                // Wait a second before trying the next server; don't use
-                // this loop as a busy wait and eat CPU for no reason.
-                this_thread::sleep_for(1s);
                 // continue to next server. Don't update this one
                 continue;
             }
@@ -406,33 +452,16 @@ namespace nrpd
             }
 
             // Connect() to the server to simplify communication
-            if(server.ipv6)
+            if(!ConnectServer(server))
             {
-                sockaddr_in6& servAddr6 = (sockaddr_in6&) sendServerAddr;
-                servAddr6.sin6_port = ntohs(server.port);
-                memcpy(&(servAddr6.sin6_addr), server.host6, sizeof(servAddr6.sin6_addr));
-
-                if(connect(m_socketfd, (sockaddr*) &sendServerAddr, sizeof(sockaddr_in6)) < 0)
-                {
-                    // TODO: log error
-                    // try again?
-                    continue;
-                }
-            }
-            else
-            {
-                sockaddr_in& servAddr4 = (sockaddr_in&) sendServerAddr;
-                servAddr4.sin_port = ntohs(server.port);
-                memcpy(&(servAddr4.sin_addr), server.host4, sizeof(servAddr4.sin_addr));
-                if(connect(m_socketfd, (sockaddr*) &sendServerAddr, sizeof(sockaddr_in)) < 0)
-                {
-                    // TODO: log error
-                    // try again?
-                    continue;
-                }
+                // TODO: log error
+                // try again?
+                continue;
             }
 
             auto firstTimePoint = chrono::high_resolution_clock::now();
+
+            NrpdLog::LogString("Client: Sending request");
 
             // send request packet to server
             if( (count = send(m_socketfd, buffer->data(), requestSize, 0)) < 0)
@@ -442,9 +471,12 @@ namespace nrpd
                 continue;
             }
 
+            error = count;
+
             // receive response
             if( (count = recv(m_socketfd, buffer->data(), buffer->size(), 0)) < 0)
             {
+                error = errno;
                 // If an error occurred listening for a response
                 if(errno == EAGAIN || errno == EWOULDBLOCK)
                 {
@@ -460,12 +492,15 @@ namespace nrpd
                 continue;
             }
 
+            NrpdLog::LogString("Client: Response received");
+
             auto secondTimePoint = chrono::high_resolution_clock::now();
 
             // Validate received packet
             if(!ValidateResponsePacket(pkt))
             {
                 // TODO: log error
+                NrpdLog::LogString("Client: Response failed validation");
                 // Increment server fail count, remove from list if last fail
                 m_config->IncrementServerFailCount(server);
                 continue;
@@ -478,8 +513,11 @@ namespace nrpd
             if(!ParseResponse(server, buffer->size(), buffer->data()))
             {
                 // TODO log here
+                NrpdLog::LogString("Client: Response failed parsing");
                 continue;
             }
+
+            NrpdLog::LogString("Client: Response processed");
 
             // Mark the server as successful
             m_config->MarkServerSuccessful(server);
@@ -524,6 +562,8 @@ namespace nrpd
                 {
                     auto timeEntropy = begin ^ end;
 
+                    NrpdLog::LogString("Client: adding time entropy");
+
                     // Write entropy to pool
                     write(m_randomfd, &timeEntropy, sizeof(timeEntropy));
 
@@ -533,5 +573,11 @@ namespace nrpd
         }
 
         return 0;
+    }
+
+    void NrpdClient::ClientThread(shared_ptr<NrpdClient> client)
+    {
+        // TODO: Log return value?
+        client->ClientLoop();
     }
 }

@@ -37,6 +37,9 @@ namespace nrpd
 
         // Parse incoming request messages from a client and generate responses
         // as appropriate.
+        // outMessageLength is only the length of messages contained in msgs,
+        // it does not include the packet header length (because the packet
+        // header is not generated in ParseMessages).
         bool ParseMessages(pNrp_Header_Request pkt, int& outMessageLength, std::list<unique_ptr<unsigned char[]>>& msgs);
 
         // Calculate maximal byte size for a message, given remaining space

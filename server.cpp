@@ -1,5 +1,6 @@
 #include "server.h"
 #include "protocol.h"
+#include "log.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -385,7 +386,7 @@ namespace nrpd
         {
             sockaddr_storage srcAddr;
             socklen_t srcAddrLen = sizeof(srcAddr);
-            int count;
+            int count = 0;
             int messageLength;
             // TODO: make sure this is cleared every iteration, even on failure
             std::list<unique_ptr<unsigned char[]>> msgs;
@@ -405,12 +406,14 @@ namespace nrpd
 
             pNrp_Header_Request req = (pNrp_Header_Request) buffer;
 
+            NrpdLog::LogString("Server: packet received");
+
 
             // validate packet
             if(!ValidateRequestPacket(req))
             {
                 // ignore malformed packets
-                printf("malformed packet\n");
+                NrpdLog::LogString("Server: packet failed validation");
                 continue;
             }
 
@@ -428,6 +431,9 @@ namespace nrpd
                 continue;
             }
 
+            // Add the packet header to the length.
+            messageLength += sizeof(Nrp_Header_Packet);
+
             // generate packet header
             msg = GeneratePacketHeader(messageLength, response, msgs.size(), (pNrp_Header_Packet) buffer);
 
@@ -444,10 +450,10 @@ namespace nrpd
                 msg = NextMessage(msg);
             }
 
-            printf("sending response\n");
+            NrpdLog::LogString("Server: sending response");
 
             // send generated packet
-            if( (count = sendto(m_socketfd, buffer, count, 0, (sockaddr*) &srcAddr, srcAddrLen)) < 0)
+            if( (count = sendto(m_socketfd, buffer, messageLength, 0, (sockaddr*) &srcAddr, srcAddrLen)) < 0)
             {
                 // TODO: log some error
                 continue;
