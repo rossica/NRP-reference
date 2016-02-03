@@ -109,13 +109,15 @@ namespace nrpd
         NrpdConfig();
         NrpdConfig(string*);
 
-        unsigned short port();
+        unsigned short serverPort();
         int defaultEntropySize();
         bool enableServer();
         bool enableClient();
         bool enablePeersResponse(nrpd_msg_type type);
         bool enableClientIp4();
         bool enableClientIp6();
+        bool enableServerIp4();
+        bool enableServerIp6();
         bool daemonize();
         int clientRequestInterval();
         int receiveTimeout();
@@ -166,6 +168,8 @@ namespace nrpd
         mutex m_probationaryMutex;
         bool m_clientEnableIp4;
         bool m_clientEnableIp6;
+        bool m_serverEnableIp4;
+        bool m_serverEnableIp6;
 
         int m_clientRequestIntervalSeconds;
         int m_clientReceiveTimeout;

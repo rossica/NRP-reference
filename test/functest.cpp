@@ -882,7 +882,7 @@ bool TestConfigGetServerList()
             if(result.get() != nullptr)
             {
                 cout << "GetServerList returned memory. Expected nullptr" << endl;
-                //return false;
+                return false;
             }
         }
         else
@@ -890,7 +890,7 @@ bool TestConfigGetServerList()
             if(result.get() == nullptr)
             {
                 cout << "GetServerList returned nullptr. Expected memory" << endl;
-                //return false;
+                return false;
             }
 
             if(test.outSize != test.expectedSize)

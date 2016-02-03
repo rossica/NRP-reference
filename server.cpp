@@ -49,23 +49,63 @@ namespace nrpd
 
     int NrpdServer::InitializeServer()
     {
-        sockaddr_in host_addr = {0};
+        sockaddr_storage hostStor = {0};
+        int hostSize = 0;
 
-        // TODO: make this configurable
-        m_socketfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-        if(m_socketfd < 0)
+        // IPv4 only
+        if(m_config->enableServerIp4() && !m_config->enableServerIp6())
         {
-            // insert error code here
-            return errno;
+            sockaddr_in& addr = (sockaddr_in&) hostStor;
+
+            m_socketfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+            if(m_socketfd < 0)
+            {
+                // insert error code here
+                return errno;
+            }
+
+            addr.sin_port = htons(m_config->serverPort());
+            addr.sin_addr.s_addr = INADDR_ANY;
+            addr.sin_family = AF_INET;
+
+            hostSize = sizeof(addr);
+        }
+        // IPv6 or Dual-stack
+        else if(m_config->enableServerIp6())
+        {
+            sockaddr_in6& addr = (sockaddr_in6&) hostStor;
+            int v6only = 0;
+
+            m_socketfd = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
+            if(m_socketfd < 0)
+            {
+                // insert error code here
+                return errno;
+            }
+
+            addr.sin6_port = htons(m_config->serverPort());
+            addr.sin6_addr = in6addr_any;
+            addr.sin6_family = AF_INET6;
+
+            hostSize = sizeof(addr);
+
+            // Dual-Stack
+            if(m_config->enableServerIp4())
+            {
+                if(setsockopt(m_socketfd, IPPROTO_IPV6, IPV6_V6ONLY, &v6only, sizeof(v6only)) < 0)
+                {
+                    // TODO: log error
+                    return errno;
+                }
+            }
+        }
+        else
+        {
+            // this shouldn't happen.
+            // TODO: print error and exit.
         }
 
-        host_addr.sin_port = htons(m_config->port());
-        // TODO: get this from configuration
-        host_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-        host_addr.sin_family = AF_INET;
-
-
-        if(bind(m_socketfd, (sockaddr*) &host_addr, sizeof(sockaddr_in)) < 0)
+        if(bind(m_socketfd, (sockaddr*) &hostStor, hostSize) < 0)
         {
             // TODO: add logging
             return errno;
@@ -421,6 +461,7 @@ namespace nrpd
             if(m_recentClients->IsPresentAdd(srcAddr))
             {
                 // Ignore this client. They've talked to us too recently
+                NrpdLog::LogString("Server: Client seen too recently. Ignoring");
                 continue;
             }
 
@@ -428,6 +469,7 @@ namespace nrpd
             if(!ParseMessages(req, messageLength, msgs))
             {
                 // TODO: log error
+                NrpdLog::LogString("Server: failed to parse client request");
                 continue;
             }
 
@@ -456,6 +498,7 @@ namespace nrpd
             if( (count = sendto(m_socketfd, buffer, messageLength, 0, (sockaddr*) &srcAddr, srcAddrLen)) < 0)
             {
                 // TODO: log some error
+                NrpdLog::LogString("Server: failed to send to client");
                 continue;
             }
 

@@ -34,9 +34,14 @@ namespace nrpd
     {
         m_state = destroying;
 
-        if(m_socketfd > 0)
+        if(m_socketfd4 > 0)
         {
-            close(m_socketfd);
+            close(m_socketfd4);
+        }
+
+        if(m_socketfd6 > 0)
+        {
+            close(m_socketfd6);
         }
 
         if(m_randomfd > 0)
@@ -51,29 +56,60 @@ namespace nrpd
         timeval timeout = { (__time_t) (m_config->receiveTimeout()), 0};
         sockaddr_storage stor = {0};
         sockaddr_in& hostAddr = (sockaddr_in&) stor;
+        sockaddr_in6& hostAddr6 = (sockaddr_in6&) stor;
 
-        m_socketfd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-        if(m_socketfd < 0)
+        if(m_config->enableClientIp6())
         {
-            // TODO: log error here
-            return errno;
+            m_socketfd6 = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
+            if(m_socketfd6 < 0)
+            {
+                // TODO: log error here
+                return errno;
+            }
+
+            // Set send timeout
+            if(setsockopt(m_socketfd6, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeval)) < 0)
+            {
+                // TODO: log error
+                return errno;
+            }
+
+            // Bind to the socket
+            hostAddr6.sin6_addr = IN6ADDR_ANY_INIT;
+            hostAddr6.sin6_family = AF_INET6;
+
+            if(bind(m_socketfd6, (sockaddr*) &stor, sizeof(hostAddr6)))
+            {
+                // TODO: add logging
+                return errno;
+            }
         }
 
-        // Set send timeout
-        if(setsockopt(m_socketfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeval)) < 0)
+        if(m_config->enableClientIp4())
         {
-            // TODO: log error
-            return errno;
-        }
+            m_socketfd4 = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+            if(m_socketfd4 < 0)
+            {
+                // TODO: log error here
+                return errno;
+            }
 
-        // Bind to the socket
-        hostAddr.sin_addr.s_addr = htonl(INADDR_ANY);
-        hostAddr.sin_family = AF_INET;
+            // Set send timeout
+            if(setsockopt(m_socketfd4, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeval)) < 0)
+            {
+                // TODO: log error
+                return errno;
+            }
 
-        if(bind(m_socketfd, (sockaddr*) &stor, sizeof(sockaddr_in)))
-        {
-            // TODO: add logging
-            return errno;
+            // Bind to the socket
+            hostAddr.sin_addr.s_addr = INADDR_ANY;
+            hostAddr.sin_family = AF_INET;
+
+            if(bind(m_socketfd4, (sockaddr*) &stor, sizeof(hostAddr6)))
+            {
+                // TODO: add logging
+                return errno;
+            }
         }
 
         // TODO: Make random device configurable
@@ -191,9 +227,10 @@ namespace nrpd
             servAddr6.sin6_port = server.port;
             memcpy(&(servAddr6.sin6_addr), server.host6, sizeof(servAddr6.sin6_addr));
 
-            if((error = connect(m_socketfd, (sockaddr*) &sendServerAddr, sizeof(sockaddr_in6))) < 0)
+            if((error = connect(m_socketfd6, (sockaddr*) &sendServerAddr, sizeof(sockaddr_in6))) < 0)
             {
                 // TODO: log error
+                NrpdLog::LogString("Client: failed to connect IPv6 server");
                 error = errno;
                 result = false;
             }
@@ -205,9 +242,10 @@ namespace nrpd
             servAddr4.sin_port = server.port;
             memcpy(&(servAddr4.sin_addr), server.host4, sizeof(servAddr4.sin_addr));
 
-            if((error = connect(m_socketfd, (sockaddr*) &sendServerAddr, sizeof(sockaddr_in))) < 0)
+            if((error = connect(m_socketfd4, (sockaddr*) &sendServerAddr, sizeof(sockaddr_in))) < 0)
             {
                 // TODO: log error
+                NrpdLog::LogString("Client: failed to connect IPv4 server");
                 error = errno;
                 result = false;
             }
@@ -249,6 +287,7 @@ namespace nrpd
         {
             // Error reading from random device.
             // TODO: log error
+            NrpdLog::LogString("Client: failed to read from random device");
 
             success = false;
         }
@@ -284,6 +323,7 @@ namespace nrpd
         {
             // Error writing entropy
             // TODO: log error
+            NrpdLog::LogString("Client: failed to write to random device");
             // This is serious enough to signal failure
             success = false;
         }
@@ -361,6 +401,7 @@ namespace nrpd
             switch(msg->msgType)
             {
             case entropy:
+                NrpdLog::LogString("Client: entropy message");
                 if(!ScrambleEntropy(msg->countOrSize, msg->content))
                 {
                     // Proceed with consuming the entropy without modification;
@@ -392,6 +433,7 @@ namespace nrpd
                 }
                 break;
             case reject:
+                NrpdLog::LogString("Client: received reject message");
                 if(!ParseRejectMessage(server, msg))
                 {
                     // TODO: log here
@@ -421,10 +463,12 @@ namespace nrpd
         unique_ptr<array<unsigned char, MAX_RESPONSE_MESSAGE_SIZE>> buffer = make_unique<array<unsigned char,MAX_RESPONSE_MESSAGE_SIZE>>();
         pNrp_Header_Packet pkt = (pNrp_Header_Packet) buffer->data();
         int requestSize;
+        int socketfd;
 
         while(m_state == running)
         {
             // Reset variables
+            socketfd = 0;
             error = 0;
             count = 0;
             requestSize = 0;
@@ -459,12 +503,22 @@ namespace nrpd
                 continue;
             }
 
+            // Set socketfd for local use
+            if(server.ipv6)
+            {
+                socketfd = m_socketfd6;
+            }
+            else
+            {
+                socketfd = m_socketfd4;
+            }
+
             auto firstTimePoint = chrono::high_resolution_clock::now();
 
             NrpdLog::LogString("Client: Sending request");
 
             // send request packet to server
-            if( (count = send(m_socketfd, buffer->data(), requestSize, 0)) < 0)
+            if( (count = send(socketfd, buffer->data(), requestSize, 0)) < 0)
             {
                 // If packet exceeds MTU, reset MTU and continue
                 // TODO: log error
@@ -474,7 +528,7 @@ namespace nrpd
             error = count;
 
             // receive response
-            if( (count = recv(m_socketfd, buffer->data(), buffer->size(), 0)) < 0)
+            if( (count = recv(socketfd, buffer->data(), buffer->size(), 0)) < 0)
             {
                 error = errno;
                 // If an error occurred listening for a response
@@ -489,6 +543,8 @@ namespace nrpd
                 {
                     // TODO: log error
                 }
+
+                NrpdLog::LogString("Client: failed to receive response");
                 continue;
             }
 

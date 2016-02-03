@@ -25,7 +25,8 @@ namespace nrpd
         };
 
         shared_ptr<NrpdConfig> m_config;
-        int m_socketfd;
+        int m_socketfd4;
+        int m_socketfd6;
         int m_randomfd;
 
         NrpdClientState m_state;

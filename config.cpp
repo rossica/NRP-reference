@@ -164,7 +164,9 @@ namespace nrpd
         m_countIp4Servers = -1;
         m_clientEnableIp4 = true;
         m_clientEnableIp6 = true;
-        m_configuredServers = {ServerRecord({127,0,0,1}, 8080)};
+        m_serverEnableIp4 = true;
+        m_serverEnableIp6 = true;
+        //m_activeServers = {ServerRecord({0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1}, 8080),ServerRecord({127,0,0,1}, 8080)};
     }
 
     NrpdConfig::NrpdConfig(string* path)
@@ -173,7 +175,7 @@ namespace nrpd
         m_configPath = *path;
     }
 
-    unsigned short NrpdConfig::port()
+    unsigned short NrpdConfig::serverPort()
     {
         return m_port;
     }
@@ -226,6 +228,16 @@ namespace nrpd
     bool NrpdConfig::enableClientIp6()
     {
         return m_clientEnableIp6;
+    }
+
+    bool NrpdConfig::enableServerIp4()
+    {
+        return m_serverEnableIp4;
+    }
+
+    bool NrpdConfig::enableServerIp6()
+    {
+        return m_serverEnableIp6;
     }
 
     int NrpdConfig::ActiveServerCount(nrpd_msg_type type)
@@ -467,6 +479,7 @@ namespace nrpd
     {
         serv.failureCount += 1;
         serv.lastaccessTime = chrono::steady_clock::now();
+        serv.retryTime *= 1.25;
 
         // Server has failed too many times, remove it
         if(serv.failureCount + 1 >= CLIENT_MAX_SERVER_TIMEOUT_COUNT)
