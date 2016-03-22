@@ -520,7 +520,7 @@ bool TestProtocolCreateResponse()
         return false;
     }
 
-    rej = GenerateRejectMessage(nrpd_reject_reason::unsupported, nrpd_msg_type::pubkey, rej);
+    rej = GenerateRejectMessage(nrpd_reject_reason::unsupported, nrpd_msg_type::signcert, rej);
 
     if(rej == nullptr)
     {

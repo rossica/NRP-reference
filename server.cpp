@@ -112,7 +112,7 @@ namespace nrpd
         }
 
         // TODO: Get MTU from the interface
-        m_mtu = 1500;
+        m_mtu = MAX_IP6_PACKET_SIZE;
 
         // TODO: Make random device configurable
         if((m_randomfd = open("/dev/urandom", O_RDONLY)) < 0)
@@ -309,7 +309,7 @@ namespace nrpd
         unique_ptr<unsigned char[]> tempMsgBuffer;
 
         // Only send as much data as will fit in one packet. Client can request more later.
-        int bytesRemaining = m_mtu - sizeof(udphdr);
+        int bytesRemaining = m_mtu;
         int responseSize;
         int msgCount;
 
@@ -350,9 +350,11 @@ namespace nrpd
             case entropy:
                 tempMsgBuffer = GenerateEntropyResponse(currentMsg->countOrSize, CalculateRemainingBytes(bytesRemaining, rejections.size()), responseSize);
                 break;
-            case pubkey:
+            case signcert:
+            case certchain:
+            case encryptionkey:
             case secureentropy:
-                // TODO: check if configured for pubkey
+                // TODO: check if configured for signcert
                 rejections.push_back({currentMsg->msgType, unsupported});
                 break;
             default:
@@ -463,6 +465,17 @@ namespace nrpd
                 // Ignore this client. They've talked to us too recently
                 NrpdLog::LogString("Server: Client seen too recently. Ignoring");
                 continue;
+            }
+
+            // Set the "MTU" based on the IP protocol of the client.
+            // This controls the number and size of messages in the response.
+            if(IsAddressIp4(srcAddr))
+            {
+                m_mtu = MAX_IP4_PACKET_SIZE;
+            }
+            else
+            {
+                m_mtu = MAX_IP6_PACKET_SIZE;
             }
 
             // parse messages in request

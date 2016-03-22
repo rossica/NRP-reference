@@ -15,8 +15,10 @@ namespace nrpd
         ip4peers = 4,               // Valid IP4 hosts that speak NRP
         entropy = 5,                // Random data
         ip6peers = 6,               // Valid IP6 hosts that speak NRP
-        pubkey = 7,                 // RSA public key and cert to establish trust
-        secureentropy = 8,          // Entropy encrypted with a one-time pad
+        signcert = 7,               // X509 certificate for signing.
+        certchain = 8,              // X509 certificate chain for establishing trust in sign cert.
+        encryptionkey = 9,          // Public key used for encrypting secure entropy.
+        secureentropy = 10,         // Entropy encrypted with a one-time pad.
         nrpd_msg_type_max
     };
 
@@ -83,6 +85,8 @@ namespace nrpd
 #define CLIENT_MIN_RETRY_SECONDS (60)
 #define CLIENT_RESPONSE_TIMEOUT_SECONDS (30)
 #define CLIENT_MAX_SERVER_TIMEOUT_COUNT (5)
+#define MAX_IP6_PACKET_SIZE (1236)
+#define MAX_IP4_PACKET_SIZE (532)
 
     // Advance message pointer by length of message
     pNrp_Header_Message NextMessage(pNrp_Header_Message msg);

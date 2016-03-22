@@ -75,4 +75,32 @@ namespace std
         }
     };
 
+    // Test if the IP address in a sockaddr is IP4
+    // default to false
+    inline bool IsAddressIp4(const sockaddr_storage& ss)
+    {
+        if(ss.ss_family == AF_INET)
+        {
+            return true;
+        }
+        else if(ss.ss_family == AF_INET6)
+        {
+            unsigned char nullPrefix[12] = {0};
+            // Check for IPv6-Mapped-IPv4 address
+            if(0 == memcmp(&(((const sockaddr_in6&)ss).sin6_addr.s6_addr),
+                           nullPrefix,
+                           sizeof(nullPrefix)))
+            {
+                return true;
+            }
+
+            return false;
+        }
+        else
+        {
+            // This shouldn't happen.
+            return false;
+        }
+    }
+
 }

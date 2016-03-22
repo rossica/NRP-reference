@@ -119,7 +119,9 @@ namespace nrpd
                 return false;
             }
             break;
-        case nrpd_msg_type::pubkey:
+        case nrpd_msg_type::signcert:
+        case nrpd_msg_type::certchain:
+        case nrpd_msg_type::encryptionkey:
         case nrpd_msg_type::secureentropy:
         default:
             // Servers are more permissive than clients, since servers may receive

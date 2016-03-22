@@ -153,7 +153,7 @@ namespace nrpd
 
         // Calculate maximum request message for this server
         int serverMsgSupportCount = 2; // For the packet and entropy headers
-        serverMsgSupportCount += ((server.pubKey) ? 1 : 0);
+        serverMsgSupportCount += ((server.signcert) ? 1 : 0);
         serverMsgSupportCount += ((server.ip4Peers) ? 1 : 0);
         serverMsgSupportCount += ((server.ip6Peers) ? 1 : 0);
         // Check size of the buffer is large enough to hold the request
@@ -164,16 +164,22 @@ namespace nrpd
         }
 
 
-        // 1. request public key info or secure entropy from the server
-        // (if public key info is already obtained)
-        if(server.pubKey)
+        // 1. request signing cert info or secure entropy from the server
+        // (if signing cert info is already obtained)
+        if(server.signcert)
         {
-            // if server has pubkey info
-                // TODO: construct a secureentropy request message
-            // else if server.cert->NearExpiration()
-                // TODO: construct new pubkey request message
+            // if server has signcert info
+                //if server.cert->NearExpiration()
+                    // TODO: construct new signcert request message
+                // if server has certchain info
+                    // if server has encryption key info
+                        // TODO: construct a secureentropy request message
+                    // else
+                        // TODO: construct encryptionkey request message
+                // else
+                    // TODO: construct a certchain request message
             // else
-                // TODO: Construct a pubkey request message
+                // TODO: Construct a signcert request message
         }
 
         // 2. Request entropy from the server
@@ -363,8 +369,8 @@ namespace nrpd
                         case ip6peers:
                             server.ip6Peers = false;
                             break;
-                        case pubkey:
-                            server.pubKey = false;
+                        case signcert:
+                            server.signcert = false;
                             break;
                         default:
                             // server rejected an unknown message type as unsupported
@@ -439,7 +445,9 @@ namespace nrpd
                     // TODO: log here
                 }
                 break;
-            case pubkey:
+            case signcert:
+            case certchain:
+            case encryptionkey:
             case secureentropy:
                 // TODO: implement these
                 break;
