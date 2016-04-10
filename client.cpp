@@ -153,7 +153,7 @@ namespace nrpd
 
         // Calculate maximum request message for this server
         int serverMsgSupportCount = 2; // For the packet and entropy headers
-        serverMsgSupportCount += ((server.signcert) ? 1 : 0);
+        serverMsgSupportCount += ((server.signkey) ? 1 : 0);
         serverMsgSupportCount += ((server.ip4Peers) ? 1 : 0);
         serverMsgSupportCount += ((server.ip6Peers) ? 1 : 0);
         // Check size of the buffer is large enough to hold the request
@@ -166,11 +166,11 @@ namespace nrpd
 
         // 1. request signing cert info or secure entropy from the server
         // (if signing cert info is already obtained)
-        if(server.signcert)
+        if(server.signkey)
         {
-            // if server has signcert info
+            // if server has signkey info
                 //if server.cert->NearExpiration()
-                    // TODO: construct new signcert request message
+                    // TODO: construct new signkey request message
                 // if server has certchain info
                     // if server has encryption key info
                         // TODO: construct a secureentropy request message
@@ -179,7 +179,7 @@ namespace nrpd
                 // else
                     // TODO: construct a certchain request message
             // else
-                // TODO: Construct a signcert request message
+                // TODO: Construct a signkey request message
         }
 
         // 2. Request entropy from the server
@@ -369,8 +369,8 @@ namespace nrpd
                         case ip6peers:
                             server.ip6Peers = false;
                             break;
-                        case signcert:
-                            server.signcert = false;
+                        case signkey:
+                            server.signkey = false;
                             break;
                         default:
                             // server rejected an unknown message type as unsupported
@@ -445,7 +445,7 @@ namespace nrpd
                     // TODO: log here
                 }
                 break;
-            case signcert:
+            case signkey:
             case certchain:
             case encryptionkey:
             case secureentropy:

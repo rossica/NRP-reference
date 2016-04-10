@@ -4,6 +4,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 
 
 #include <errno.h>
@@ -350,8 +351,8 @@ namespace nrpd
             case entropy:
                 tempMsgBuffer = GenerateEntropyResponse(currentMsg->countOrSize, CalculateRemainingBytes(bytesRemaining, rejections.size()), responseSize);
                 break;
-            case signcert:
             case certchain:
+            case signkey:
             case encryptionkey:
             case secureentropy:
                 // TODO: check if configured for signcert
@@ -488,6 +489,8 @@ namespace nrpd
 
             // Add the packet header to the length.
             messageLength += sizeof(Nrp_Header_Packet);
+
+            assert(messageLength <= m_mtu);
 
             // generate packet header
             msg = GeneratePacketHeader(messageLength, response, msgs.size(), (pNrp_Header_Packet) buffer);

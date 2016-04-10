@@ -47,7 +47,7 @@ namespace nrpd
             unsigned short probationary : 1; // is server proven good?
             unsigned short ip4Peers : 1; // does server support ipv4 peers?
             unsigned short ip6Peers : 1; // does server support ipv6 peers?
-            unsigned short signcert : 1; // does server support sign cert?
+            unsigned short signkey : 1; // does server support sign key?
             unsigned short shuttingdown : 1; // Server sent shutdown message.
             unsigned short reserved : 10; // reserved for future flags.
         };

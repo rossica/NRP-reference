@@ -101,7 +101,7 @@ namespace nrpd
         probationary = true;
         ip4Peers = true;
         ip6Peers = true;
-        signcert = true;
+        signkey = true;
         shuttingdown = false;
     }
 
@@ -128,7 +128,7 @@ namespace nrpd
         probationary = true;
         ip4Peers = true;
         ip6Peers = true;
-        signcert = true;
+        signkey = true;
         shuttingdown = false;
 
     }

@@ -7,18 +7,18 @@ namespace nrpd
     enum nrpd_msg_type
     {
         nrpd_msg_type_min = 0,
-        request = 1,                // Request a response from a server
-        response = 2,               // Respond to a request
+        request = 1,            // Request a response from a server
+        response = 2,           // Respond to a request
         response_msg_min = 3,
-        reject = 3,                 // Reject a request
+        reject = 3,             // Reject a request
         request_msg_min = 4,
-        ip4peers = 4,               // Valid IP4 hosts that speak NRP
-        entropy = 5,                // Random data
-        ip6peers = 6,               // Valid IP6 hosts that speak NRP
-        signcert = 7,               // X509 certificate for signing.
-        certchain = 8,              // X509 certificate chain for establishing trust in sign cert.
-        encryptionkey = 9,          // Public key used for encrypting secure entropy.
-        secureentropy = 10,         // Entropy encrypted with a one-time pad.
+        ip4peers = 4,           // Valid IP4 hosts that speak NRP
+        entropy = 5,            // Random data
+        ip6peers = 6,           // Valid IP6 hosts that speak NRP
+        certchain = 7,          // X509 certificate chain for establishing trust in server.
+        signkey = 8,            // Server's public key for signing secure entropy.
+        encryptionkey = 9,      // Server's public key for encrypting secure entropy.
+        secureentropy = 10,     // Entropy encrypted with a one-time key.
         nrpd_msg_type_max
     };
 
@@ -71,6 +71,55 @@ namespace nrpd
         unsigned char ip[16];
         unsigned short port;
     } Nrp_Message_Ip6Peer, *pNrp_Message_Ip6Peer;
+
+    typedef struct _NRP_MESSAGE_CERTCHAIN_REQUEST
+    {
+        unsigned short requestChunk;
+    } Nrp_Message_CertChain_Request, *pNrp_Message_CertChain_Request;
+
+    typedef struct _NRP_MESSAGE_CERTCHAIN_RESPONSE_IP4
+    {
+        unsigned short chunk;
+        unsigned short totalChunks;
+        unsigned char data[464];
+        unsigned char hash[32];
+    } Nrp_Message_CertChain_Response4, *pNrp_Message_CertChain_Response4;
+
+    typedef struct _NRP_MESSAGE_CERTCHAIN_RESPONSE_IP6
+    {
+        unsigned short chunk;
+        unsigned short totalChunks;
+        unsigned char data[964];
+        unsigned char hash[32];
+    } Nrp_Message_CertChain_Response6, *pNrp_Message_CertChain_Response6;
+
+    typedef struct _NRP_MESSAGE_SIGNKEY_RESPONSE
+    {
+        unsigned char key[32];
+        char epiryTime[21];
+        unsigned char keyId;
+        unsigned char signature[];
+    } Nrp_Message_SignKey_Response, *pNrp_Message_SignKey_Response;
+
+    typedef struct _NRP_MESSAGE_ENCRYPTIONKEY_RESPONSE
+    {
+        unsigned char key[32];
+        char expiryTime[21];
+        unsigned char keyId;
+        unsigned char signature[];
+    } Nrp_Message_EncryptionKey_Response, *pNrp_Message_EncryptionKey_Response;
+
+    typedef struct _NRP_MESSAGE_SECUREENTROPY_REQUEST
+    {
+        unsigned char clientKey[32];
+        unsigned char keyId;
+    } Nrp_Message_SecureEntropy_Request, *pNrp_Message_SecureEntropy_Request;
+
+    typedef struct _NRP_MESSAGE_SECUREENTROPY_RESPONSE
+    {
+        unsigned char entropy[128];
+        unsigned char signature[];
+    } Nrp_Message_SecureEntropy_Response, *pNrp_Message_SecureEntropy_Response;
 
 
 #define MAX_BYTE (255)
